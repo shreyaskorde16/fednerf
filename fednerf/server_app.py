@@ -14,6 +14,7 @@ from fednerf.fednerf_utils.server_utils import (
     get_log_dirs,
 )
 
+
 # Create ServerApp
 app = ServerApp()
 
@@ -28,8 +29,11 @@ def main(grid: Grid, context: Context) -> None:
     )
 
     # append log directories to config
-    config = get_log_dirs(Client_id=1, cfg=config)
-
+    config = get_log_dirs(Client_id=None, cfg=config)
+    # Convert the OmegaConf config to a dictionary
+    config_dict = OmegaConf.to_container(config, resolve=True)
+    
+    
     # Set up custom logging
     logger = custom_logging(client_id=None, cfg=config)
     logger.info(f"Loaded config:\n{OmegaConf.to_yaml(config)}")
@@ -45,13 +49,14 @@ def main(grid: Grid, context: Context) -> None:
     arrays = ArrayRecord(global_model.state_dict())
 
     # Initialize FedAvg strategy
-    strategy = FedAvg(fraction_train=fraction_train)
+    strategy = FedAvg(fraction_train=fraction_train,
+                      )
 
     # Start strategy, run FedAvg for `num_rounds`
     result = strategy.start(
         grid=grid,
         initial_arrays=arrays,
-        train_config=ConfigRecord({"lr": lr}),
+        train_config=ConfigRecord(config_dict),
         num_rounds=num_rounds,
     )
 

@@ -8,6 +8,7 @@ from logging.handlers import RotatingFileHandler
 
 
 
+
 def get_config(config_path: str = "./configs", config_file_name: str = "colosseum_1.yaml"):
     """Load the config file"""
 
@@ -18,12 +19,12 @@ def get_config(config_path: str = "./configs", config_file_name: str = "colosseu
 
     return config
 
-def custom_logging(client_id: None, cfg: DictConfig = None):
+def custom_logging(client_id: None, cfg = None):
     """Set up custom logging for Flower server and Ray."""
     # Create a single formatter
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
-    root_log_path = cfg.root_log_path
+    root_log_path = cfg["root_log_path"]
     if client_id is None:
         log_filename = "server.log"
     elif client_id is not None:

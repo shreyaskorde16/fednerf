@@ -15,13 +15,13 @@ netwidth: 256         # channels per layer
 netdepth_fine: 8      # layers in fine network
 netwidth_fine: 256    # channels per layer in fine network
 N_rand: 4096          # 32*32*4 batch size (number of random rays per gradient step)
-lrate: 5e-4           # 0.0005 learning rate
+lr: 5e-4           # 0.0005 learning rate
 lrate_decay: 250      # exponential learning rate decay (in 1000 steps)
 chunk: 32768          # 1024*32 number of rays processed in parallel, decrease if running out of memory
 netchunk: 65536       # 1024*64 number of pts sent through network in parallel, decrease if running out of memory')
 no_batching: false    # action='store_true', help='only take random rays from 1 image at a time')
 no_reload: false      # action='store_true', help='do not reload weights from saved ckpt')
-ft_path: null         # default=None, help='specific weights npy file to reload for coarse network')
+ft_path: false         # default=None, help='specific weights npy file to reload for coarse network')
 
 # rendering options
 N_samples: 64         # number of coarse samples per ray
