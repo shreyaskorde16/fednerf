@@ -3,7 +3,7 @@
 ## Experiment settings for Federated Learning with NeRF on Colosseum_1 dataset
 expname: "colosseum_1_test"
 basedir: "./logs"
-datadir: "./data/nerf_llff_data/colosseum_1_processed"
+datadir: "./data/nerf_llff_data"
 dataset_type: "llff"
 
 # N_rand: 1024

@@ -1,6 +1,7 @@
 """first: A Flower / PyTorch app."""
 
 import torch
+import os
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 from omegaconf import OmegaConf
@@ -23,13 +24,18 @@ def train(msg: Message, context: Context):
     print(config["expname"])
     config["client_id"] = context.node_config["partition-id"]
     print(config["client_id"])
+    cid = context.node_config["partition-id"]
 
     # Custom logging
-    logger = custom_logging(client_id=context.node_config["partition-id"], cfg=config)
+    logger = custom_logging(client_id=cid, cfg=config)
     logger.info(f"Loaded config:\n{config}")
+    cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
+    #print(f"Client {cid} using data from {cid_datadir}")
+
+    
 
 
-
+    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
     # Load the model and initialize it with the received weights
     model = Net()
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
