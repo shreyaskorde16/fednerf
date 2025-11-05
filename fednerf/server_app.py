@@ -43,6 +43,10 @@ def main(grid: Grid, context: Context) -> None:
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["lr"]
 
+
+
+    
+
     # Load global model
     global_model = Net()
     logger.info("Loading global model...")

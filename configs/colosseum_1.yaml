@@ -15,18 +15,18 @@ netwidth: 256         # channels per layer
 netdepth_fine: 8      # layers in fine network
 netwidth_fine: 256    # channels per layer in fine network
 N_rand: 4096          # 32*32*4 batch size (number of random rays per gradient step)
-lr: 5e-4           # 0.0005 learning rate
+lr: 5e-4              # 0.0005 learning rate
 lrate_decay: 250      # exponential learning rate decay (in 1000 steps)
 chunk: 32768          # 1024*32 number of rays processed in parallel, decrease if running out of memory
 netchunk: 65536       # 1024*64 number of pts sent through network in parallel, decrease if running out of memory')
 no_batching: false    # action='store_true', help='only take random rays from 1 image at a time')
 no_reload: false      # action='store_true', help='do not reload weights from saved ckpt')
-ft_path: false         # default=None, help='specific weights npy file to reload for coarse network')
+ft_path: false        # default=None, help='specific weights npy file to reload for coarse network')
 
 # rendering options
 N_samples: 64         # number of coarse samples per ray
 N_importance: 64      # number of additional fine samples per ray 
-perturb: 1.0           # set to 0. for no jitter, 1. for jitter
+perturb: 1.0          # set to 0. for no jitter, 1. for jitter
 use_viewdirs: true    # action='store_true', help='use full 5D input instead of 3D
 i_embed: 0            # set 0 for default positional encoding, -1 for none
 multires: 10          # log2 of max freq for positional encoding (3D location)
@@ -38,7 +38,7 @@ render_factor: 0      # downsampling factor to speed up rendering, set 4 or 8 fo
 
 ## training options
 precrop_iters: 0      # number of steps to train on central crops
-precrop_frac: 0.5      # fraction of img taken for central crops') 
+precrop_frac: 0.5     # fraction of img taken for central crops') 
 
 ## dataset options
 testskip: 8           # will load 1/N images from test/val sets, useful for large datasets like deepvoxels
