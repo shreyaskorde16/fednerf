@@ -1,0 +1,138 @@
+Nerf Workflow:
+
+
+def Train()
+	load data()
+	cast intrinsics (H;W;FOCAL) in Right types
+	
+178	create nerf model(cfg) -> render_kwargs_train, kwargs_test, start, grad_vars_ Optimizer
+
+	if render True: render_only() -> renders novel views for val data
+
+	Random ray batching
+	
+	for loop for Iteration (Training):
+
+		# core optimization loop
+69		rgb, disp, acc, extras = render(H, W, K, chunk=args.chunk, rays=batch_rays,
+                                                verbose=i < 10, retraw=True,
+                                                **render_kwargs_train)
+
+			# aall ret contains ['rgb_map', 'disp_map', 'acc_map']
+126			(Output) all_ret = batchify_rays(rays, chunk, **kwargs)
+
+				# Render rays in smaller minibatches to avoid OOM.
+59				ret = render_rays(rays_flat[i:i+chunk], **kwargs)
+
+
+308					#def render_rays(ray_batch,
+                                                         network_fn,
+							 network_query_fn,
+                                                         N_samples,
+                                                         retraw=False,
+           					         lindisp=False,
+           						 perturb=0.,
+           					         N_importance=0,
+            					         network_fine=None,
+              						 white_bkgd=False,
+              					         raw_noise_std=0.,
+              					         verbose=False,
+              						 pytest=False): -> 
+					Returns:
+     					rgb_map: [num_rays, 3]. Estimated RGB color of a ray. Comes from fine             					model.
+    					disp_map: [num_rays]. Disparity map. 1 / depth.
+      					acc_map: [num_rays]. Accumulated opacity along each ray. Comes from fine 					model.
+      					raw: [num_rays, num_samples, 4]. Raw predictions from model.
+      					rgb0: See rgb_map. Output for coarse model.
+      					disp0: See disp_map. Output for coarse model.
+      					acc0: See acc_map. Output for coarse model.
+      					z_std: [num_rays]. Standard deviation of distances along ray for each
+       					sample.
+					
+385_____________________________________raw = network_query_fn(pts, viewdirs, network_fn) -> run_network (lambda):
+
+						# run network (coarse Nerf model)
+37						def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, 
+								netchunk=1024*64): 
+						|
+						|	outputs_flat = batchify(fn, netchunk)(embedded)
+						|
+						|       def batchify(fn, chunk): 
+						|	  def ret(inputs):
+						|	  torch.cat([fn(inputs[i:i+chunk]) for i in range(0, 
+                                                |         |     inputs.shape[0], chunk)], 0) # model output flat
+						|	  return -> ret function
+						return -> Outputs
+
+386_______________________________________rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, 
+                                                                                 z_vals, rays_d, raw_noise_std,
+                                                                                 white_bkgd, pytest=pytest)
+
+						# Transforms model's predictions to semantically meaningful values.
+262						def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, 
+                                                                  white_bkgd=False, pytest=False):
+
+126__________________________________________ all_ret as Output 
+760__________________________________________ rgb, disp, acc, extras from 134 line
+
+
+
+
+
+
+
+
+
+
+		# logging
+		rgbs, disps = render_path(render_poses, hwf, K, args.chunk, render_kwargs_test)
+	
+	
+
+~~~~~~~~~~~~~~
+
+inside create nerf:
+
+network_query_fn = lambda inputs, viewdirs, network_fn : run_network(inputs, viewdirs, network_fn,
+                                                                embed_fn=embed_fn,
+                                                                embeddirs_fn=embeddirs_fn,
+                                                                netchunk=args.netchunk)
+		
+ render_kwargs_train = {
+        'network_query_fn' : network_query_fn,
+        'perturb' : args.perturb,
+        'N_importance' : args.N_importance,
+        'network_fine' : model_fine,
+        'N_samples' : args.N_samples,
+        'network_fn' : model,
+        'use_viewdirs' : args.use_viewdirs,
+        'white_bkgd' : args.white_bkgd,
+        'raw_noise_std' : args.raw_noise_std,
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
