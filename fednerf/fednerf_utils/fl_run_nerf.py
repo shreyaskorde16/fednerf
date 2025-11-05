@@ -11,12 +11,12 @@ from tqdm import tqdm, trange
 
 import matplotlib.pyplot as plt
 
-from run_nerf_helpers import *
+from fednerf.fednerf_utils.fl_run_nerf_helpers import *
 
-from load_llff import load_llff_data
-from load_deepvoxels import load_dv_data
-from load_blender import load_blender_data
-from load_LINEMOD import load_LINEMOD_data
+from fednerf.fednerf_utils.load_llff import load_llff_data
+from fednerf.fednerf_utils.load_deepvoxels import load_dv_data
+from fednerf.fednerf_utils.load_blender import load_blender_data
+from fednerf.fednerf_utils.load_LINEMOD import load_LINEMOD_data
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -30,7 +30,7 @@ def batchify(fn, chunk):
     if chunk is None:
         return fn
     def ret(inputs):
-        return torch.cat([fn(inputs[i:i+chunk]) for i in range(0, inputs.shape[0], chunk)], 0)
+        return torch.cat([fn(inputs[i:i+chunk]) for i in range(0, inputs.shape[0], chunk)], 0) # model output flat
     return ret
 
 
@@ -213,7 +213,7 @@ def create_nerf(args):
     ##########################
 
     # Load checkpoints
-    if args.ft_path is not None and args.ft_path!='None':
+    if args.ft_path is not None and args.ft_path!='False':
         ckpts = [args.ft_path]
     else:
         ckpts = [os.path.join(basedir, expname, f) for f in sorted(os.listdir(os.path.join(basedir, expname))) if 'tar' in f]
@@ -348,7 +348,7 @@ def render_rays(ray_batch,
       z_std: [num_rays]. Standard deviation of distances along ray for each
         sample.
     """
-    N_rays = ray_batch.shape[0]
+    N_rays = ray_batch.shape[0] # rays chunk
     rays_o, rays_d = ray_batch[:,0:3], ray_batch[:,3:6] # [N_rays, 3] each
     viewdirs = ray_batch[:,-3:] if ray_batch.shape[-1] > 8 else None
     bounds = torch.reshape(ray_batch[...,6:8], [-1,1,2])
