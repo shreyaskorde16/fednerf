@@ -175,51 +175,51 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
     return rgbs, disps
 
 
-def create_nerf(args):
+def create_nerf(config):
     """Instantiate NeRF's MLP model.
     """
-    embed_fn, input_ch = get_embedder(args.multires, args.i_embed)
+    embed_fn, input_ch = get_embedder(config["multires"], config["i_embed"])
 
     input_ch_views = 0
     embeddirs_fn = None
-    if args.use_viewdirs:
-        embeddirs_fn, input_ch_views = get_embedder(args.multires_views, args.i_embed)
-    output_ch = 5 if args.N_importance > 0 else 4
+    if config["use_viewdirs"]:
+        embeddirs_fn, input_ch_views = get_embedder(config["multires_views"], config["i_embed"])
+    output_ch = 5 if config["N_importance"] > 0 else 4
     skips = [4]
-    model = NeRF(D=args.netdepth, W=args.netwidth,
+    model = NeRF(D=config["netdepth"], W=config["netwidth"],
                  input_ch=input_ch, output_ch=output_ch, skips=skips,
-                 input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+                 input_ch_views=input_ch_views, use_viewdirs=config["use_viewdirs"]).to(device)
     grad_vars = list(model.parameters())
 
     model_fine = None
-    if args.N_importance > 0:
-        model_fine = NeRF(D=args.netdepth_fine, W=args.netwidth_fine,
+    if config["N_importance"]  > 0:
+        model_fine = NeRF(D=config["netdepth_fine"], W=config["netwidth_fine"],
                           input_ch=input_ch, output_ch=output_ch, skips=skips,
-                          input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+                          input_ch_views=input_ch_views, use_viewdirs=config["use_viewdirs"]).to(device)
         grad_vars += list(model_fine.parameters())
 
     network_query_fn = lambda inputs, viewdirs, network_fn : run_network(inputs, viewdirs, network_fn,
                                                                 embed_fn=embed_fn,
                                                                 embeddirs_fn=embeddirs_fn,
-                                                                netchunk=args.netchunk)
+                                                                netchunk=config["netchunk"])
 
     # Create optimizer
-    optimizer = torch.optim.Adam(params=grad_vars, lr=args.lrate, betas=(0.9, 0.999))
+    optimizer = torch.optim.Adam(params=grad_vars, lr=config["lrate"], betas=(0.9, 0.999))
 
     start = 0
-    basedir = args.basedir
-    expname = args.expname
+    basedir = config["basedir"]
+    expname = config["expname"]
 
     ##########################
 
     # Load checkpoints
-    if args.ft_path is not None and args.ft_path!='False':
-        ckpts = [args.ft_path]
+    if config["ft_path"] is not None and config["ft_path"]!='False':
+        ckpts = [ config["ft_path"]]
     else:
         ckpts = [os.path.join(basedir, expname, f) for f in sorted(os.listdir(os.path.join(basedir, expname))) if 'tar' in f]
 
     print('Found ckpts', ckpts)
-    if len(ckpts) > 0 and not args.no_reload:
+    if len(ckpts) > 0 and not config["no_reload"]:
         ckpt_path = ckpts[-1]
         print('Reloading from', ckpt_path)
         ckpt = torch.load(ckpt_path)
@@ -233,7 +233,7 @@ def create_nerf(args):
             model_fine.load_state_dict(ckpt['network_fine_state_dict'])
 
     ##########################
-
+    """
     render_kwargs_train = {
         'network_query_fn' : network_query_fn,
         'perturb' : args.perturb,
@@ -245,18 +245,23 @@ def create_nerf(args):
         'white_bkgd' : args.white_bkgd,
         'raw_noise_std' : args.raw_noise_std,
     }
-
+    """
     # NDC only good for LLFF-style forward facing data
-    if args.dataset_type != 'llff' or args.no_ndc:
+    if config["dataset_type"] != 'llff' or config["no_ndc"]:
         print('Not ndc!')
-        render_kwargs_train['ndc'] = False
-        render_kwargs_train['lindisp'] = args.lindisp
-
+        config['ndc'] = False
+        config['lindisp'] = config.lindisp
+    """
     render_kwargs_test = {k : render_kwargs_train[k] for k in render_kwargs_train}
     render_kwargs_test['perturb'] = False
     render_kwargs_test['raw_noise_std'] = 0.
-
-    return render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer
+    """
+    config_test = {
+        'perturb': False,
+        'raw_noise_std': 0.,
+    }
+    # return render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer
+    return model, model_fine, network_query_fn, start, optimizer, grad_vars, config, config_test
 
 
 def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False, pytest=False):
@@ -622,6 +627,8 @@ def train():
     if args.render_test:
         render_poses = np.array(poses[i_test])
 
+
+
     # Create log dir and copy the config file
     basedir = args.basedir
     expname = args.expname
@@ -638,7 +645,7 @@ def train():
 
     # Create nerf model
     render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_nerf(args)
-    global_step = start
+    global_step = start  # either 0 or loaded from ckpt
 
     bds_dict = {
         'near' : near,
@@ -647,8 +654,12 @@ def train():
     render_kwargs_train.update(bds_dict)
     render_kwargs_test.update(bds_dict)
 
+    # ~~~~~~~~~ after this implement train_fednerf(): ~~~~~~~~~~~~~~~~~
+
     # Move testing data to GPU
     render_poses = torch.Tensor(render_poses).to(device)
+
+    # ~~~~~~~~~~~~~~~~~ Below part is not included in train_fednerf():   ~~~~~~~~~~~~~~~~~~~
 
     # Short circuit if only rendering out from trained model
     if args.render_only:
@@ -670,6 +681,8 @@ def train():
             imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=30, quality=8)
 
             return
+    
+    # ~~~~~~~~~~~~~~~~~ Above part is not included in train_fednerf():   ~~~~~~~~~~~~~~~~~~~
 
     # Prepare raybatch tensor if batching random rays
     N_rand = args.N_rand

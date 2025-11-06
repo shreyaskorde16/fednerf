@@ -125,6 +125,15 @@ def train(msg: Message, context: Context):
         render_poses = np.array(poses[i_test])
 
     # Load NeRF Model
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    np.random.seed(0)
+
+    # import model and assign start value
+    #global_step = start 
+    config['near'] = near
+    config['far'] = far
+
+
 
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
