@@ -16,6 +16,9 @@ from fednerf.fednerf_utils.load_llff import load_llff_data
 from fednerf.fednerf_utils.load_blender import load_blender_data
 from fednerf.fednerf_utils.load_LINEMOD import load_LINEMOD_data
 from fednerf.fednerf_utils.load_deepvoxels import load_dv_data
+from fednerf.fednerf_utils.fl_run_nerf import (
+    create_nerf,
+)
 
 # Flower ClientApp
 app = ClientApp()
@@ -25,7 +28,7 @@ app = ClientApp()
 def train(msg: Message, context: Context):
     """Train the model on local data."""
     config = msg.content["config"]
-    print(config["lr"])
+    print(config["lrate"])
     print(config["expname"])
     config["client_id"] = context.node_config["partition-id"]
     print(config["client_id"])
@@ -133,6 +136,20 @@ def train(msg: Message, context: Context):
     config['near'] = near
     config['far'] = far
 
+    #model, model_fine, network_query_fn, start, optimizer, grad_vars, config, config_test = create_nerf(config=config)
+
+    (
+    nerf_model,            # Main NeRF model
+    nerf_model_fine,       # Fine model
+    network_query_fn,      # Query function for the network
+    start,                 # Starting value
+    optimizer,             # Optimizer
+    grad_vars,             # Gradient variables
+    config,                # Configuration (possibly updated)
+    config_test            # Test configuration
+    ) = create_nerf(config=config)
+
+    # load statd dict of model adn fin model from msg.content and pass to training function
 
 
 
@@ -154,7 +171,7 @@ def train(msg: Message, context: Context):
         model,
         trainloader,
         context.run_config["local-epochs"],
-        msg.content["config"]["lr"],
+        msg.content["config"]["lrate"],
         device,
     )
 

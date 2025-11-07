@@ -13,6 +13,9 @@ from fednerf.fednerf_utils.server_utils import (
     custom_logging,
     get_log_dirs,
 )
+from fednerf.fednerf_utils.fl_run_nerf import (
+    create_nerf,
+)
 
 
 # Create ServerApp
@@ -38,14 +41,17 @@ def main(grid: Grid, context: Context) -> None:
     logger = custom_logging(client_id=None, cfg=config)
     logger.info(f"Loaded config:\n{OmegaConf.to_yaml(config)}")
 
+    model, model_fine, _, _, _, _, config_dict, config_test = create_nerf(config=config_dict)
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
     # Read run config
     fraction_train: float = context.run_config["fraction-train"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["lr"]
 
-
-
-    
 
     # Load global model
     global_model = Net()

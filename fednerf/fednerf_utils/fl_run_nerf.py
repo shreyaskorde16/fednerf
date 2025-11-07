@@ -51,12 +51,24 @@ def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
     return outputs
 
 
-def batchify_rays(rays_flat, chunk=1024*32, **kwargs):
+def batchify_rays(rays_flat, chunk=1024*32, model=None, fine_model=None, nerf_query_fn=None, retraw = False, verbose=False, config=None):
     """Render rays in smaller minibatches to avoid OOM.
     """
     all_ret = {}
     for i in range(0, rays_flat.shape[0], chunk):
-        ret = render_rays(rays_flat[i:i+chunk], **kwargs)
+        ret = render_rays(rays_flat[i:i+chunk], 
+                          network_fn=model,
+                          network_query_fn=nerf_query_fn,
+                          N_samples=config["N_samples"],
+                          retraw=retraw,
+                          lindisp=config["lindisp"],
+                          perturb=config["perturb"],
+                          N_importance=config["N_importance"],
+                          network_fine=fine_model,
+                          white_bkgd=config["white_bkgd"],
+                          raw_noise_std=config["raw_noise_std"],
+                          verbose=verbose,
+                          pytest=False)
         for k in ret:
             if k not in all_ret:
                 all_ret[k] = []
@@ -66,10 +78,16 @@ def batchify_rays(rays_flat, chunk=1024*32, **kwargs):
     return all_ret
 
 
-def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
+def render(H, W, K, chunk=1024*32, rays=None, verbose = False,
+                  retraw = False,
+                  c2w=None, ndc=True,
                   near=0., far=1.,
-                  use_viewdirs=False, c2w_staticcam=None,
-                  **kwargs):
+                  use_viewdirs=False, 
+                  c2w_staticcam=None,
+                  model=None,
+                  fine_model=None,
+                  nerf_query_fn=None,
+                  config=None):
     """Render rays
     Args:
       H: int. Height of image in pixels.
@@ -123,7 +141,7 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
         rays = torch.cat([rays, viewdirs], -1)
 
     # Render and reshape
-    all_ret = batchify_rays(rays, chunk, **kwargs)
+    all_ret = batchify_rays(rays, chunk, model, fine_model, nerf_query_fn, retraw, verbose, config)
     for k in all_ret:
         k_sh = list(sh[:-1]) + list(all_ret[k].shape[1:])
         all_ret[k] = torch.reshape(all_ret[k], k_sh)
@@ -134,7 +152,15 @@ def render(H, W, K, chunk=1024*32, rays=None, c2w=None, ndc=True,
     return ret_list + [ret_dict]
 
 
-def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
+def render_path(render_poses, hwf, K, chunk, 
+                config_test, 
+                gt_imgs=None, 
+                savedir=None, 
+                render_factor=0,
+                model=None, 
+                model_fine=None,
+                nerf_query_fn=None,
+                ):
 
     H, W, focal = hwf
 
@@ -151,7 +177,13 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
     for i, c2w in enumerate(tqdm(render_poses)):
         print(i, time.time() - t)
         t = time.time()
-        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], **render_kwargs)
+        rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], 
+                                   verbose=i < 10, retraw=True,
+                                   model=model,
+                                   fine_model=model_fine,
+                                   nerf_query_fn=nerf_query_fn,
+                                   config=config_test)
+
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
         if i==0:
@@ -211,7 +243,7 @@ def create_nerf(config):
     expname = config["expname"]
 
     ##########################
-
+    """
     # Load checkpoints
     if config["ft_path"] is not None and config["ft_path"]!='False':
         ckpts = [ config["ft_path"]]
@@ -231,7 +263,7 @@ def create_nerf(config):
         model.load_state_dict(ckpt['network_fn_state_dict'])
         if model_fine is not None:
             model_fine.load_state_dict(ckpt['network_fine_state_dict'])
-
+    """
     ##########################
     """
     render_kwargs_train = {
