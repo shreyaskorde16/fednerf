@@ -36,7 +36,7 @@ def train(msg: Message, context: Context):
 
     # Custom logging
     logger = custom_logging(client_id=cid, cfg=config)
-    logger.info(f"Loaded config:\n{config}")
+    #logger.info(f"Loaded config:\n{config}")
     cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
     #print(f"Client {cid} using data from {cid_datadir}")
 
@@ -154,9 +154,29 @@ def train(msg: Message, context: Context):
 
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
+
+    # Load the combined state dictionary from the server
+    combined_state_dict = msg.content["arrays"].to_torch_state_dict()
+
+    # Split the combined state dictionary into coarse and fine models
+    coarse_state_dict = {}
+    fine_state_dict = {}
     # Load the model and initialize it with the received weights
     model = Net()
-    model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
+
+    for key, value in combined_state_dict.items():
+        if key.startswith("fine_"):
+            fine_state_dict[key[len("fine_"):]] = value
+        else:
+            coarse_state_dict[key] = value
+
+        # Load the state dictionaries into the models
+    model.load_state_dict(coarse_state_dict)
+    if nerf_model_fine:
+        nerf_model_fine.load_state_dict(fine_state_dict)
+
+
+    #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
@@ -175,8 +195,15 @@ def train(msg: Message, context: Context):
         device,
     )
 
+    coarse_state_dict = model.state_dict()
+    fine_state_dict = nerf_model_fine.state_dict()
+
+    # Prefix the fine model's keys and combine the state dictionaries
+    fine_state_dict = {f"fine_{k}": v for k, v in fine_state_dict.items()}
+    combined_state_dict = {**coarse_state_dict, **fine_state_dict}
+
     # Construct and return reply Message
-    model_record = ArrayRecord(model.state_dict())
+    model_record = ArrayRecord(combined_state_dict)
     metrics = {
         "train_loss": train_loss,
         "num-examples": len(trainloader.dataset),
@@ -189,10 +216,23 @@ def train(msg: Message, context: Context):
 @app.evaluate()
 def evaluate(msg: Message, context: Context):
     """Evaluate the model on local data."""
+    combined_state_dict = msg.content["arrays"].to_torch_state_dict()
+
+    # Split the combined state dictionary into coarse and fine models
+    coarse_state_dict = {}
+    fine_state_dict = {}
 
     # Load the model and initialize it with the received weights
     model = Net()
-    model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
+    for key, value in combined_state_dict.items():
+        if key.startswith("fine_"):
+            fine_state_dict[key[len("fine_"):]] = value
+        else:
+            coarse_state_dict[key] = value
+
+        # Load the state dictionaries into the models
+    model.load_state_dict(coarse_state_dict)
+    #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 

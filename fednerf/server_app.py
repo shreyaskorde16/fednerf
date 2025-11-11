@@ -43,6 +43,37 @@ def main(grid: Grid, context: Context) -> None:
 
     model, model_fine, _, _, _, _, config_dict, config_test = create_nerf(config=config_dict)
 
+    # Assume `model` and `model_fine` are your NeRF models
+    coarse_state_dict = model.state_dict()
+    fine_state_dict = model_fine.state_dict()
+
+    # Print coarse model state dict
+    print("\nCoarse Model State Dictionary:")
+    for key, tensor in coarse_state_dict.items():
+        print(f"{key}: {tensor.shape}")
+    print("*"*50)
+
+    # Print fine model state dict
+    print("\nFine Model State Dictionary:")
+    for key, tensor in fine_state_dict.items():
+        print(f"{key}: {tensor.shape}")
+    print("*"*50)
+
+    # Prefix fine model keys and combine
+    fine_state_dict = {f"fine_{k}": v for k, v in fine_state_dict.items()}
+    # Print fine model state dict
+    print("\nModified Fine Model State Dictionary:")
+    for key, tensor in fine_state_dict.items():
+        print(f"{key}: {tensor.shape}")
+    print("*"*50)
+
+    #combined_state_dict = {**coarse_state_dict, **fine_state_dict}
+
+ 
+
+
+
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -55,8 +86,14 @@ def main(grid: Grid, context: Context) -> None:
 
     # Load global model
     global_model = Net()
+    global_model_state_dict = global_model.state_dict()
     logger.info("Loading global model...")
-    arrays = ArrayRecord(global_model.state_dict())
+
+    combined_state_dict = {**global_model_state_dict, **fine_state_dict}
+    arrays = ArrayRecord(combined_state_dict)
+
+
+
 
     # Initialize FedAvg strategy
     strategy = FedAvg(fraction_train=fraction_train,
