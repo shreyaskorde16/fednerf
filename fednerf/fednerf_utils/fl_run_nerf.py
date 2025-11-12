@@ -51,7 +51,7 @@ def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
     return outputs
 
 
-def batchify_rays(rays_flat, chunk=1024*32, model=None, fine_model=None, nerf_query_fn=None, retraw = False, verbose=False, config=None):
+def batchify_rays(rays_flat, chunk=1024*32, model=None, fine_model=None, nerf_query_fn=None, retraw = False, verbose=False, config=None, device=None):
     """Render rays in smaller minibatches to avoid OOM.
     """
     all_ret = {}
@@ -68,7 +68,8 @@ def batchify_rays(rays_flat, chunk=1024*32, model=None, fine_model=None, nerf_qu
                           white_bkgd=config["white_bkgd"],
                           raw_noise_std=config["raw_noise_std"],
                           verbose=verbose,
-                          pytest=False)
+                          pytest=False,
+                          device=device)
         for k in ret:
             if k not in all_ret:
                 all_ret[k] = []
@@ -87,7 +88,8 @@ def render(H, W, K, chunk=1024*32, rays=None, verbose = False,
                   model=None,
                   fine_model=None,
                   nerf_query_fn=None,
-                  config=None):
+                  config=None,
+                  device=None):
     """Render rays
     Args:
       H: int. Height of image in pixels.
@@ -141,7 +143,15 @@ def render(H, W, K, chunk=1024*32, rays=None, verbose = False,
         rays = torch.cat([rays, viewdirs], -1)
 
     # Render and reshape
-    all_ret = batchify_rays(rays, chunk, model, fine_model, nerf_query_fn, retraw, verbose, config)
+    all_ret = batchify_rays(rays, chunk, 
+                            model=model, 
+                            fine_model=fine_model, 
+                            nerf_query_fn=nerf_query_fn, 
+                            retraw=retraw, 
+                            verbose=verbose, 
+                            config=config,
+                            device=device)
+    
     for k in all_ret:
         k_sh = list(sh[:-1]) + list(all_ret[k].shape[1:])
         all_ret[k] = torch.reshape(all_ret[k], k_sh)
@@ -207,7 +217,7 @@ def render_path(render_poses, hwf, K, chunk,
     return rgbs, disps
 
 
-def create_nerf(config):
+def create_nerf(config,):
     """Instantiate NeRF's MLP model.
     """
     embed_fn, input_ch = get_embedder(config["multires"], config["i_embed"])
@@ -220,14 +230,14 @@ def create_nerf(config):
     skips = [4]
     model = NeRF(D=config["netdepth"], W=config["netwidth"],
                  input_ch=input_ch, output_ch=output_ch, skips=skips,
-                 input_ch_views=input_ch_views, use_viewdirs=config["use_viewdirs"]).to(device)
+                 input_ch_views=input_ch_views, use_viewdirs=config["use_viewdirs"])
     grad_vars = list(model.parameters())
 
     model_fine = None
     if config["N_importance"]  > 0:
         model_fine = NeRF(D=config["netdepth_fine"], W=config["netwidth_fine"],
                           input_ch=input_ch, output_ch=output_ch, skips=skips,
-                          input_ch_views=input_ch_views, use_viewdirs=config["use_viewdirs"]).to(device)
+                          input_ch_views=input_ch_views, use_viewdirs=config["use_viewdirs"])
         grad_vars += list(model_fine.parameters())
 
     network_query_fn = lambda inputs, viewdirs, network_fn : run_network(inputs, viewdirs, network_fn,
@@ -282,7 +292,6 @@ def create_nerf(config):
     if config["dataset_type"] != 'llff' or config["no_ndc"]:
         print('Not ndc!')
         config['ndc'] = False
-        config['lindisp'] = config.lindisp
     """
     render_kwargs_test = {k : render_kwargs_train[k] for k in render_kwargs_train}
     render_kwargs_test['perturb'] = False
@@ -296,7 +305,7 @@ def create_nerf(config):
     return model, model_fine, network_query_fn, start, optimizer, grad_vars, config, config_test
 
 
-def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False, pytest=False):
+def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False, pytest=False, device=None):
     """Transforms model's predictions to semantically meaningful values.
     Args:
         raw: [num_rays, num_samples along ray, 4]. Prediction from model.
@@ -312,7 +321,7 @@ def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False, pytest=F
     raw2alpha = lambda raw, dists, act_fn=F.relu: 1.-torch.exp(-act_fn(raw)*dists)
 
     dists = z_vals[...,1:] - z_vals[...,:-1]
-    dists = torch.cat([dists, torch.Tensor([1e10]).expand(dists[...,:1].shape)], -1)  # [N_rays, N_samples]
+    dists = torch.cat([dists, torch.tensor([1e10], device=dists.device).expand(dists[...,:1].shape)], -1)  # [N_rays, N_samples]
 
     dists = dists * torch.norm(rays_d[...,None,:], dim=-1)
 
@@ -325,7 +334,8 @@ def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False, pytest=F
         if pytest:
             np.random.seed(0)
             noise = np.random.rand(*list(raw[...,3].shape)) * raw_noise_std
-            noise = torch.Tensor(noise)
+            #noise = torch.Tensor(noise)
+            noise = torch.tensor(noise, device=raw.device)
 
     alpha = raw2alpha(raw[...,3] + noise, dists)  # [N_rays, N_samples]
     # weights = alpha * tf.math.cumprod(1.-alpha + 1e-10, -1, exclusive=True)
@@ -354,7 +364,8 @@ def render_rays(ray_batch,
                 white_bkgd=False,
                 raw_noise_std=0.,
                 verbose=False,
-                pytest=False):
+                pytest=False,
+                device=None):
     """Volumetric rendering.
     Args:
       ray_batch: array of shape [batch_size, ...]. All information necessary
@@ -385,13 +396,16 @@ def render_rays(ray_batch,
       z_std: [num_rays]. Standard deviation of distances along ray for each
         sample.
     """
+
+    #device = ray_batch.device
     N_rays = ray_batch.shape[0] # rays chunk
     rays_o, rays_d = ray_batch[:,0:3], ray_batch[:,3:6] # [N_rays, 3] each
     viewdirs = ray_batch[:,-3:] if ray_batch.shape[-1] > 8 else None
     bounds = torch.reshape(ray_batch[...,6:8], [-1,1,2])
     near, far = bounds[...,0], bounds[...,1] # [-1,1]
 
-    t_vals = torch.linspace(0., 1., steps=N_samples)
+    t_vals = torch.linspace(0., 1., steps=N_samples, device=device)
+
     if not lindisp:
         z_vals = near * (1.-t_vals) + far * (t_vals)
     else:
@@ -405,7 +419,7 @@ def render_rays(ray_batch,
         upper = torch.cat([mids, z_vals[...,-1:]], -1)
         lower = torch.cat([z_vals[...,:1], mids], -1)
         # stratified samples in those intervals
-        t_rand = torch.rand(z_vals.shape)
+        t_rand = torch.rand(z_vals.shape, device=device)
 
         # Pytest, overwrite u with numpy's fixed random numbers
         if pytest:
@@ -420,7 +434,7 @@ def render_rays(ray_batch,
 
 #     raw = run_network(pts)
     raw = network_query_fn(pts, viewdirs, network_fn)
-    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
+    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest, device=device)
 
     if N_importance > 0:
 
@@ -759,7 +773,7 @@ def train():
         # Sample random ray batch
         if use_batching:
             # Random over all images
-            batch = rays_rgb[i_batch:i_batch+N_rand] # [B, 2+1, 3*?]
+            batch = rays_rgb[i_batch:i_batch+N_rand] # [B, 2+1, 3*?]  N_rand = Number of random rays per batch
             batch = torch.transpose(batch, 0, 1)
             batch_rays, target_s = batch[:2], batch[2]
 

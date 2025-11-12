@@ -7,6 +7,20 @@ from omegaconf import OmegaConf, DictConfig
 from logging.handlers import RotatingFileHandler
 
 
+from flwr.server.strategy import FedAvg
+from flwr.common import ConfigRecord
+
+class CustomFedAvg(FedAvg):
+    def __init__(self, config, **kwargs):
+        super().__init__(**kwargs)
+        self.config_dict = config
+
+    def configure_evaluate(self, server_round: int, parameters, config):
+        # Include the config in the evaluation message
+        return ConfigRecord(self.config_dict)
+
+
+
 
 
 def get_config(config_path: str = "./configs", config_file_name: str = "colosseum_1.yaml"):

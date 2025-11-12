@@ -3,6 +3,7 @@
 import torch
 import os
 import numpy as np
+import copy
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 from omegaconf import OmegaConf
@@ -12,12 +13,13 @@ from fednerf.task import train as train_fn
 from fednerf.fednerf_utils.server_utils import (
     custom_logging,
 )
-from fednerf.fednerf_utils.load_llff import load_llff_data
-from fednerf.fednerf_utils.load_blender import load_blender_data
-from fednerf.fednerf_utils.load_LINEMOD import load_LINEMOD_data
-from fednerf.fednerf_utils.load_deepvoxels import load_dv_data
 from fednerf.fednerf_utils.fl_run_nerf import (
     create_nerf,
+    render_path
+)
+from fednerf.fednerf_utils.client_utils import (
+    train_fednerf,
+    load_nerf_data
 )
 
 # Flower ClientApp
@@ -27,91 +29,24 @@ app = ClientApp()
 @app.train()
 def train(msg: Message, context: Context):
     """Train the model on local data."""
+
+    # Load config from server message
     config = msg.content["config"]
-    print(config["lrate"])
-    print(config["expname"])
+
     config["client_id"] = context.node_config["partition-id"]
-    print(config["client_id"])
     cid = context.node_config["partition-id"]
 
     # Custom logging
     logger = custom_logging(client_id=cid, cfg=config)
+
     #logger.info(f"Loaded config:\n{config}")
     cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
-    #print(f"Client {cid} using data from {cid_datadir}")
 
-    K = None
-    if config["dataset_type"] == 'llff':
-        images, poses, bds, render_poses, i_test = load_llff_data(cid_datadir, config["factor"],
-                                                                  recenter=True, bd_factor=.75,
-                                                                  spherify=config["spherify"])
-        hwf = poses[0,:3,-1]
-        poses = poses[:,:3,:4]
-        logger.info(f"Loaded llff, image_shape = {images.shape}, render_poses_shape = {render_poses.shape}, hwf = {hwf}, Client data_path = {cid_datadir}")
-        logger.info(f"render_poses_shape = {render_poses.shape}, hwf = {hwf}")
-        logger.info(f"Client data_path = {cid_datadir}")
-        if not isinstance(i_test, list):
-            i_test = [i_test]
+    # Load NeRF data
+    images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test = load_nerf_data(config = config,
+                                                                                                cid_datadir=cid_datadir,
+                                                                                                logger=logger)
 
-        if config["llffhold"] > 0:
-            logger.info(f"Auto LLFF holdout = {config['llffhold']}")
-            i_test = np.arange(images.shape[0])[::config["llffhold"]]
-
-        i_val = i_test
-        i_train = np.array([i for i in np.arange(int(images.shape[0])) if
-                        (i not in i_test and i not in i_val)])
-
-        logger.info('DEFINING BOUNDS')
-        if config["no_ndc"]:
-            near = np.ndarray.min(bds) * .9
-            far = np.ndarray.max(bds) * 1.
-            
-        else:
-            near = 0.
-            far = 1.
-        logger.info(f"NEAR = {near}, FAR = {far}")
-    
-    elif config["dataset_type"] == 'blender':
-        images, poses, render_poses, hwf, i_split = load_blender_data(cid_datadir, config["half_res"], config["testskip"])
-        print('Loaded blender', images.shape, render_poses.shape, hwf, cid_datadir)
-        i_train, i_val, i_test = i_split
-
-        near = 2.
-        far = 6.
-
-        if config["white_bkgd"]:
-            images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
-        else:
-            images = images[...,:3]
-    
-    elif config["dataset_type"] == 'LINEMOD':
-        images, poses, render_poses, hwf, K, i_split, near, far = load_LINEMOD_data(cid_datadir, config["half_res"], config["testskip"])
-        print(f'Loaded LINEMOD, images shape: {images.shape}, hwf: {hwf}, K: {K}')
-        print(f'[CHECK HERE] near: {near}, far: {far}.')
-        i_train, i_val, i_test = i_split
-
-        if config["white_bkgd"]:
-            images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
-        else:
-            images = images[...,:3]
-    
-    elif config["dataset_type"] == 'deepvoxels':
-
-        images, poses, render_poses, hwf, i_split = load_dv_data(scene=config["shape"],
-                                                                 basedir=cid_datadir,
-                                                                 testskip=config["testskip"])
-
-        print('Loaded deepvoxels', images.shape, render_poses.shape, hwf, cid_datadir)
-        i_train, i_val, i_test = i_split
-
-        hemi_R = np.mean(np.linalg.norm(poses[:,:3,-1], axis=-1))
-        near = hemi_R-1.
-        far = hemi_R+1.
-
-    else:
-        print('Unknown dataset type', config["dataset_type"], 'exiting')
-        return
-    
     # Cast intrinsics to right types
     H, W, focal = hwf
     H, W = int(H), int(W)
@@ -149,12 +84,6 @@ def train(msg: Message, context: Context):
     config_test            # Test configuration
     ) = create_nerf(config=config)
 
-    # load statd dict of model adn fin model from msg.content and pass to training function
-
-
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
     # Load the combined state dictionary from the server
     combined_state_dict = msg.content["arrays"].to_torch_state_dict()
 
@@ -162,7 +91,7 @@ def train(msg: Message, context: Context):
     coarse_state_dict = {}
     fine_state_dict = {}
     # Load the model and initialize it with the received weights
-    model = Net()
+    #model = Net()
 
     for key, value in combined_state_dict.items():
         if key.startswith("fine_"):
@@ -171,31 +100,25 @@ def train(msg: Message, context: Context):
             coarse_state_dict[key] = value
 
         # Load the state dictionaries into the models
-    model.load_state_dict(coarse_state_dict)
+    nerf_model.load_state_dict(coarse_state_dict)
     if nerf_model_fine:
         nerf_model_fine.load_state_dict(fine_state_dict)
 
+    nerf_model.to(device)
+    if nerf_model_fine:
+        nerf_model_fine.to(device)
 
-    #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    # Train nerf model on local data
+    nerf_model, nerf_model_fine, loss, psnr, psnr0 = train_fednerf(H, W, K, poses, i_train, i_test, i_val, start, 
+                                                    nerf_model, nerf_model_fine, network_query_fn, 
+                                                    render_poses, device, optimizer, 
+                                                    hwf, images, logger, config)
 
 
-    # Load the data
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    trainloader, _ = load_data(partition_id, num_partitions)
 
-    # Call the training function
-    train_loss = train_fn(
-        model,
-        trainloader,
-        context.run_config["local-epochs"],
-        msg.content["config"]["lrate"],
-        device,
-    )
 
-    coarse_state_dict = model.state_dict()
+
+    coarse_state_dict = nerf_model.state_dict()
     fine_state_dict = nerf_model_fine.state_dict()
 
     # Prefix the fine model's keys and combine the state dictionaries
@@ -205,57 +128,107 @@ def train(msg: Message, context: Context):
     # Construct and return reply Message
     model_record = ArrayRecord(combined_state_dict)
     metrics = {
-        "train_loss": train_loss,
-        "num-examples": len(trainloader.dataset),
+        "train_loss": loss,
+        "train_psnr": psnr,
+        "train_psnr0": psnr0,
     }
     metric_record = MetricRecord(metrics)
     content = RecordDict({"arrays": model_record, "metrics": metric_record})
     return Message(content=content, reply_to=msg)
 
 
+
+
+
 @app.evaluate()
 def evaluate(msg: Message, context: Context):
     """Evaluate the model on local data."""
+    config = msg.content["config"]
+    config["client_id"] = context.node_config["partition-id"]
+
+    # load test data
+    cid = context.node_config["partition-id"]
+
+    if "root_log_path" not in config:
+        root_log_path = os.path.join(config["basedir"], config["expname"])
+        os.makedirs(root_log_path, exist_ok=True)
+        config["root_log_path"] = root_log_path
+
+    # Custom logging
+    logger = custom_logging(client_id=cid, cfg=config)
+    #logger.info(f"Loaded config:\n{config}")
+    cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
+    #print(f"Client {cid} using data from {cid_datadir}")
+
+    # Load NeRF data
+    images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test = load_nerf_data(config = config,
+                                                                                                cid_datadir=cid_datadir,
+                                                                                                logger=logger)
+
+    (
+    nerf_model,            # Main NeRF model
+    nerf_model_fine,       # Fine model
+    network_query_fn,      # Query function for the network
+    start,                 # Starting value
+    optimizer,             # Optimizer
+    grad_vars,             # Gradient variables
+    config,                # Configuration (possibly updated)
+    config_test            # Test configuration
+    ) = create_nerf(config=config)
+
+
     combined_state_dict = msg.content["arrays"].to_torch_state_dict()
 
     # Split the combined state dictionary into coarse and fine models
     coarse_state_dict = {}
     fine_state_dict = {}
-
-    # Load the model and initialize it with the received weights
-    model = Net()
     for key, value in combined_state_dict.items():
         if key.startswith("fine_"):
             fine_state_dict[key[len("fine_"):]] = value
         else:
             coarse_state_dict[key] = value
 
-        # Load the state dictionaries into the models
-    model.load_state_dict(coarse_state_dict)
+    # Load the state dictionaries into the models
+    nerf_model.load_state_dict(coarse_state_dict)
+    nerf_model_fine.load_state_dict(fine_state_dict)
+
     #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    nerf_model.to(device)
+    nerf_model_fine.to(device)
 
-    
+    config_test = copy.deepcopy(config)
+    config_test["perturb"] = False
+    config_test['raw_noise_std'] = 0.
 
-    # Load the data
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    _, valloader = load_data(partition_id, num_partitions)
+    root_log_path = config["root_log_path"]
+    expname = config["expname"]
 
-    # Call the evaluation function
-    eval_loss, eval_acc = test_fn(
-        model,
-        valloader,
-        device,
-    )
+    # Evaluate the model on local test data
+
+    #if i%config["i_testset"]==0 and i > 0:
+    testsavedir = os.path.join(root_log_path, expname, 'client_{}'.format(cid),'testset_{:06d}'.format(i))
+    os.makedirs(testsavedir, exist_ok=True)
+    print('test poses shape', poses[i_test].shape)
+    with torch.no_grad():
+        render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
+                    config_test, 
+                    gt_imgs=images[i_test], 
+                    savedir=testsavedir, 
+                    model=nerf_model,
+                    model_fine=nerf_model_fine, 
+                    nerf_query_fn=network_query_fn)
+    print('Saved test set')
+
+    success_message = f"Client {cid} evaluation completed successfully."
+
 
     # Construct and return reply Message
     metrics = {
-        "eval_loss": eval_loss,
-        "eval_acc": eval_acc,
-        "num-examples": len(valloader.dataset),
+        "status_in_eval": success_message,
+
     }
     metric_record = MetricRecord(metrics)
     content = RecordDict({"metrics": metric_record})
+
     return Message(content=content, reply_to=msg)

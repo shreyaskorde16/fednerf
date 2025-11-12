@@ -6,6 +6,7 @@ import json
 import random
 import time
 import torch
+import copy
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm, trange
@@ -19,15 +20,21 @@ from fednerf.fednerf_utils.fl_run_nerf import (
 from fednerf.fednerf_utils.fl_run_nerf_helpers import (
     get_rays,
 )
+from fednerf.fednerf_utils.load_llff import load_llff_data
+from fednerf.fednerf_utils.load_blender import load_blender_data
+from fednerf.fednerf_utils.load_LINEMOD import load_LINEMOD_data
+from fednerf.fednerf_utils.load_deepvoxels import load_dv_data
 
 
 
-
-def train_fednerf(H, W, K, p, i_train, i_test, i_val, start, 
+def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start, 
                   nerf_model, nerf_model_fine, network_query_fn, 
-                  client_id, render_poses, device, optimizer, hwf, config):
+                  render_poses, device, optimizer, 
+                  hwf, images, logger, config):
     """Train the FedNeRF model on local data."""
 
+    cid = config['client_id']
+    print(f"Client {cid} training started.")
     # Move testing data to GPU
     render_poses = torch.Tensor(render_poses).to(device)
     # Misc
@@ -124,10 +131,14 @@ def train_fednerf(H, W, K, p, i_train, i_test, i_val, start,
         #####  Core optimization loop  #####
         rgb, disp, acc, extras = render(H, W, K, chunk=config["chunk"], rays=batch_rays,
                                                 verbose=i < 10, retraw=True,
+                                                ndc=config["ndc"],
+                                                near=config["near"], far=config["far"],
+                                                use_viewdirs=config["use_viewdirs"],
                                                 model=nerf_model,
                                                 fine_model=nerf_model_fine,
                                                 nerf_query_fn=network_query_fn,
-                                                config=config)
+                                                config=config,
+                                                device=device)
 
         optimizer.zero_grad()
         img_loss = img2mse(rgb, target_s)
@@ -155,7 +166,7 @@ def train_fednerf(H, W, K, p, i_train, i_test, i_val, start,
         dt = time.time()-time0
         # print(f"Step: {global_step}, Loss: {loss}, Time: {dt}")
         #####           end            #####
-        config_test = config.copy()
+        config_test = copy.deepcopy(config)
         config_test["perturb"] = False
         config_test['raw_noise_std'] = 0.
 
@@ -193,60 +204,101 @@ def train_fednerf(H, W, K, p, i_train, i_test, i_val, start,
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', poses[i_test].shape)
             with torch.no_grad():
-                render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], config_test, gt_imgs=images[i_test], savedir=testsavedir)
+                render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
+                            config_test, 
+                            gt_imgs=images[i_test], 
+                            savedir=testsavedir, 
+                            model=nerf_model,
+                            model_fine=nerf_model_fine, 
+                            nerf_query_fn=network_query_fn)
             print('Saved test set')
-
-
     
         if i%config["i_print"]==0 or i < 10:
-            tqdm.write(f"[TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()}")
-        """
-            print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
-            print('iter time {:.05f}'.format(dt))
-
-            with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
-                tf.contrib.summary.scalar('loss', loss)
-                tf.contrib.summary.scalar('psnr', psnr)
-                tf.contrib.summary.histogram('tran', trans)
-                if args.N_importance > 0:
-                    tf.contrib.summary.scalar('psnr0', psnr0)
-
-
-            if i%args.i_img==0:
-
-                # Log a rendered validation view to Tensorboard
-                img_i=np.random.choice(i_val)
-                target = images[img_i]
-                pose = poses[img_i, :3,:4]
-                with torch.no_grad():
-                    rgb, disp, acc, extras = render(H, W, focal, chunk=args.chunk, c2w=pose,
-                                                        **render_kwargs_test)
-
-                psnr = mse2psnr(img2mse(rgb, target))
-
-                with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
-
-                    tf.contrib.summary.image('rgb', to8b(rgb)[tf.newaxis])
-                    tf.contrib.summary.image('disp', disp[tf.newaxis,...,tf.newaxis])
-                    tf.contrib.summary.image('acc', acc[tf.newaxis,...,tf.newaxis])
-
-                    tf.contrib.summary.scalar('psnr_holdout', psnr)
-                    tf.contrib.summary.image('rgb_holdout', target[tf.newaxis])
-
-
-                if args.N_importance > 0:
-
-                    with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
-                        tf.contrib.summary.image('rgb0', to8b(extras['rgb0'])[tf.newaxis])
-                        tf.contrib.summary.image('disp0', extras['disp0'][tf.newaxis,...,tf.newaxis])
-                        tf.contrib.summary.image('z_std', extras['z_std'][tf.newaxis,...,tf.newaxis])
-        """
+            tqdm.write(f"[TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()} Client_Id: {cid}")
 
         global_step += 1
 
+    return nerf_model, nerf_model_fine, loss.item(), psnr.item(), psnr0.item()
 
 
 
 
+def load_nerf_data(config = None, cid_datadir = None, logger = None):
+    
+    K = None
+    if config["dataset_type"] == 'llff':
+        images, poses, bds, render_poses, i_test = load_llff_data(cid_datadir, config["factor"],
+                                                                  recenter=True, bd_factor=.75,
+                                                                  spherify=config["spherify"])
+        hwf = poses[0,:3,-1]
+        poses = poses[:,:3,:4]
+        logger.info(f"Loaded llff, image_shape = {images.shape}, render_poses_shape = {render_poses.shape}, hwf = {hwf}, Client data_path = {cid_datadir}")
+        logger.info(f"render_poses_shape = {render_poses.shape}, hwf = {hwf}")
+        logger.info(f"Client data_path = {cid_datadir}")
+        if not isinstance(i_test, list):
+            i_test = [i_test]
 
-    return nerf_model, nerf_model_fine
+        if config["llffhold"] > 0:
+            logger.info(f"Auto LLFF holdout = {config['llffhold']}")
+            i_test = np.arange(images.shape[0])[::config["llffhold"]]
+
+        i_val = i_test
+        i_train = np.array([i for i in np.arange(int(images.shape[0])) if
+                        (i not in i_test and i not in i_val)])
+
+        logger.info('DEFINING BOUNDS')
+        if config["no_ndc"]:
+            near = np.ndarray.min(bds) * .9
+            far = np.ndarray.max(bds) * 1.
+            
+        else:
+            near = 0.
+            far = 1.
+        logger.info(f"NEAR = {near}, FAR = {far}")
+    
+    elif config["dataset_type"] == 'blender':
+        images, poses, render_poses, hwf, i_split = load_blender_data(cid_datadir, config["half_res"], config["testskip"])
+        print('Loaded blender', images.shape, render_poses.shape, hwf, cid_datadir)
+        i_train, i_val, i_test = i_split
+
+        near = 2.
+        far = 6.
+
+        if config["white_bkgd"]:
+            images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
+        else:
+            images = images[...,:3]
+    
+    elif config["dataset_type"] == 'LINEMOD':
+        images, poses, render_poses, hwf, K, i_split, near, far = load_LINEMOD_data(cid_datadir, config["half_res"], config["testskip"])
+        print(f'Loaded LINEMOD, images shape: {images.shape}, hwf: {hwf}, K: {K}')
+        print(f'[CHECK HERE] near: {near}, far: {far}.')
+        i_train, i_val, i_test = i_split
+
+        if config["white_bkgd"]:
+            images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
+        else:
+            images = images[...,:3]
+    
+    elif config["dataset_type"] == 'deepvoxels':
+
+        images, poses, render_poses, hwf, i_split = load_dv_data(scene=config["shape"],
+                                                                 basedir=cid_datadir,
+                                                                 testskip=config["testskip"])
+
+        print('Loaded deepvoxels', images.shape, render_poses.shape, hwf, cid_datadir)
+        i_train, i_val, i_test = i_split
+
+        hemi_R = np.mean(np.linalg.norm(poses[:,:3,-1], axis=-1))
+        near = hemi_R-1.
+        far = hemi_R+1.
+
+    else:
+        print('Unknown dataset type', config["dataset_type"], 'exiting')
+        return
+    
+    near = float(near)
+    far = float(far)
+    
+    return images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test
+    
