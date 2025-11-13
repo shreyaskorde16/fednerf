@@ -46,7 +46,7 @@ def train(msg: Message, context: Context):
     images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test = load_nerf_data(config = config,
                                                                                                 cid_datadir=cid_datadir,
                                                                                                 logger=logger)
-    print(f"Length of training data for client {cid}: {len(i_train)}")
+    logger.info(f"Length of training data for client {cid}: {len(i_train)}")
     # Cast intrinsics to right types
     H, W, focal = hwf
     H, W = int(H), int(W)
@@ -210,7 +210,7 @@ def evaluate(msg: Message, context: Context):
     #if i%config["i_testset"]==0 and i > 0:
     testsavedir = os.path.join(root_log_path, expname, 'client_{}'.format(cid),'testset_')
     os.makedirs(testsavedir, exist_ok=True)
-    print('test poses shape', poses[i_test].shape)
+    logger.info('test poses shape', poses[i_test].shape)
     """
     with torch.no_grad():
         render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
@@ -223,7 +223,7 @@ def evaluate(msg: Message, context: Context):
     print('Saved test set')
     """
     success_message = f"Client {cid} evaluation completed successfully."
-    print(success_message)
+    logger.info(success_message)
     
 
     # Construct and return reply Message

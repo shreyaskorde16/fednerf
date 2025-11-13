@@ -44,10 +44,9 @@ def main(grid: Grid, context: Context) -> None:
     # Convert the OmegaConf config to a dictionary
     config_dict = OmegaConf.to_container(config, resolve=True)
     
-    
     # Set up custom logging
     logger = custom_logging(client_id=None, cfg=config)
-    logger.info(f"Loaded config:\n{OmegaConf.to_yaml(config)}")
+    #logger.info(f"Loaded config:\n{OmegaConf.to_yaml(config)}")
 
     nerf_model, nerf_model_fine, _, _, _, _, config_dict, config_test = create_nerf(config=config_dict)
 
@@ -55,25 +54,8 @@ def main(grid: Grid, context: Context) -> None:
     coarse_state_dict = nerf_model.state_dict()
     fine_state_dict = nerf_model_fine.state_dict()
 
-    # Print coarse model state dict
-    print("\nCoarse Model State Dictionary:")
-    for key, tensor in coarse_state_dict.items():
-        print(f"{key}: {tensor.shape}")
-    print("*"*50)
-
-    # Print fine model state dict
-    print("\nFine Model State Dictionary:")
-    for key, tensor in fine_state_dict.items():
-        print(f"{key}: {tensor.shape}")
-    print("*"*50)
-
     # Prefix fine model keys and combine
     fine_state_dict = {f"fine_{k}": v for k, v in fine_state_dict.items()}
-    # Print fine model state dict
-    print("\nModified Fine Model State Dictionary:")
-    for key, tensor in fine_state_dict.items():
-        print(f"{key}: {tensor.shape}")
-    print("*"*50)
 
     combined_state_dict = {**coarse_state_dict, **fine_state_dict}
 
@@ -88,8 +70,6 @@ def main(grid: Grid, context: Context) -> None:
 
     # Initialize FedAvg strategy
     strategy = FedAvg(fraction_train=fraction_train)
-                      #on_evaluate_config_fn=get_config_fn(config_dict))
-    #strategy = CustomFedAvg(config=config_dict, fraction_fit=fraction_train)
 
     # Start strategy, run FedAvg for `num_rounds`
     result = strategy.start(
@@ -98,8 +78,6 @@ def main(grid: Grid, context: Context) -> None:
         train_config=ConfigRecord(config_dict),
         evaluate_config=ConfigRecord(config_dict),
         num_rounds=num_rounds,
-   
-
     )
 
     """

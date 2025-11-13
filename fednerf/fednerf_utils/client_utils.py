@@ -34,7 +34,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
     """Train the FedNeRF model on local data."""
 
     cid = config['client_id']
-    print(f"Client {cid} training started.")
+    logger.info(f"Client {cid} training started.")
     # Move testing data to GPU
     render_poses = torch.Tensor(render_poses).to(device)
     # Misc
@@ -47,18 +47,18 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
     use_batching = not config["no_batching"]
     if use_batching:
         # For random ray batching
-        print('get rays')
+        #print('get rays')
         rays = np.stack([get_rays_np(H, W, K, p) for p in poses[:,:3,:4]], 0) # [N, ro+rd, H, W, 3]
-        print('done, concats')
+        #print('done, concats')
         rays_rgb = np.concatenate([rays, images[:,None]], 1) # [N, ro+rd+rgb, H, W, 3]
         rays_rgb = np.transpose(rays_rgb, [0,2,3,1,4]) # [N, H, W, ro+rd+rgb, 3]
         rays_rgb = np.stack([rays_rgb[i] for i in i_train], 0) # train images only
         rays_rgb = np.reshape(rays_rgb, [-1,3,3]) # [(N-1)*H*W, ro+rd+rgb, 3]
         rays_rgb = rays_rgb.astype(np.float32)
-        print('shuffle rays')
+        #print('shuffle rays')
         np.random.shuffle(rays_rgb)
 
-        print('done')
+        #print('done')
         i_batch = 0
 
     # Move training data to GPU
@@ -70,10 +70,10 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
 
 
     N_local_iters = config["local_iterations"] + 1
-    print('Begin')
-    print('TRAIN views are', i_train)
-    print('TEST views are', i_test)
-    print('VAL views are', i_val)
+    #print('Begin')
+    logger.info(f'TRAIN views for Client Id: {cid} --> {len(i_train)}')
+    logger.info(f'TEST views for Client Id: {cid} --> {len(i_test)}')
+    logger.info(f'VAL views for Client Id: {cid} --> {len(i_val)}')
 
     # Summary writers
     # writer = SummaryWriter(os.path.join(basedir, 'summaries', expname))
@@ -92,7 +92,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
 
             i_batch += N_rand
             if i_batch >= rays_rgb.shape[0]:
-                print("Shuffle data after an epoch!")
+                # shuffle data after epochs
                 rand_idx = torch.randperm(rays_rgb.shape[0])
                 rays_rgb = rays_rgb[rand_idx]
                 i_batch = 0
@@ -116,7 +116,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
                             torch.linspace(W//2 - dW, W//2 + dW - 1, 2*dW)
                         ), -1)
                     if i == start:
-                        print(f"[Config] Center cropping of size {2*dH} x {2*dW} is enabled until iter {config['precrop_iters']}")                
+                        logger.info(f"[Config] Center cropping of size {2*dH} x {2*dW} is enabled until iter {config['precrop_iters']}")                
                 else:
                     coords = torch.stack(torch.meshgrid(torch.linspace(0, H-1, H), torch.linspace(0, W-1, W)), -1)  # (H, W, 2)
 
@@ -181,7 +181,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
                 'network_fine_state_dict': nerf_model_fine.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
             }, path)
-            print('Saved checkpoints at', path)
+            logger.info(f'Saved checkpoints at {path}')
         
         """
 
@@ -217,7 +217,12 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
             print('Saved test set')
         """
         if i%config["i_print"]==0 or i < 10:
-            tqdm.write(f"[TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()} Client_Id: {cid}")
+
+            tqdm.write(f"************ [TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()} Client_Id: {cid} ************ ")
+
+            logger.info(
+                f"************ [TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()} Client_Id: {cid} ************ \n"
+            )
 
         global_step += 1
 
@@ -235,21 +240,22 @@ def load_nerf_data(config = None, cid_datadir = None, logger = None):
                                                                   spherify=config["spherify"])
         hwf = poses[0,:3,-1]
         poses = poses[:,:3,:4]
-        logger.info(f"Loaded llff, image_shape = {images.shape}, render_poses_shape = {render_poses.shape}, hwf = {hwf}, Client data_path = {cid_datadir}")
-        logger.info(f"render_poses_shape = {render_poses.shape}, hwf = {hwf}")
-        logger.info(f"Client data_path = {cid_datadir}")
+        logger.info(f"Loadeed {config['dataset_type']} data for client ID {config['client_id']}")
+        #logger.info(f"Loaded llff, image_shape = {images.shape}, render_poses_shape = {render_poses.shape}, hwf = {hwf}, Client data_path = {cid_datadir}")
+        #logger.info(f"render_poses_shape = {render_poses.shape}, hwf = {hwf}")
+        #logger.info(f"Client data_path = {cid_datadir}")
         if not isinstance(i_test, list):
             i_test = [i_test]
 
         if config["llffhold"] > 0:
-            logger.info(f"Auto LLFF holdout = {config['llffhold']}")
+            #logger.info(f"Auto LLFF holdout = {config['llffhold']}")
             i_test = np.arange(images.shape[0])[::config["llffhold"]]
 
         i_val = i_test
         i_train = np.array([i for i in np.arange(int(images.shape[0])) if
                         (i not in i_test and i not in i_val)])
 
-        logger.info('DEFINING BOUNDS')
+        #logger.info('DEFINING BOUNDS')
         if config["no_ndc"]:
             near = np.ndarray.min(bds) * .9
             far = np.ndarray.max(bds) * 1.
@@ -257,11 +263,12 @@ def load_nerf_data(config = None, cid_datadir = None, logger = None):
         else:
             near = 0.
             far = 1.
-        logger.info(f"NEAR = {near}, FAR = {far}")
+        #logger.info(f"NEAR = {near}, FAR = {far}")
     
     elif config["dataset_type"] == 'blender':
         images, poses, render_poses, hwf, i_split = load_blender_data(cid_datadir, config["half_res"], config["testskip"])
-        print('Loaded blender', images.shape, render_poses.shape, hwf, cid_datadir)
+        logger.info(f"Loadeed {config['dataset_type']} data for client ID {config['client_id']}")
+        #print('Loaded blender', images.shape, render_poses.shape, hwf, cid_datadir)
         i_train, i_val, i_test = i_split
 
         near = 2.
@@ -274,8 +281,9 @@ def load_nerf_data(config = None, cid_datadir = None, logger = None):
     
     elif config["dataset_type"] == 'LINEMOD':
         images, poses, render_poses, hwf, K, i_split, near, far = load_LINEMOD_data(cid_datadir, config["half_res"], config["testskip"])
-        print(f'Loaded LINEMOD, images shape: {images.shape}, hwf: {hwf}, K: {K}')
-        print(f'[CHECK HERE] near: {near}, far: {far}.')
+        logger.info(f"Loadeed {config['dataset_type']} data for client ID {config['client_id']}")
+        #print(f'Loaded LINEMOD, images shape: {images.shape}, hwf: {hwf}, K: {K}')
+        #print(f'[CHECK HERE] near: {near}, far: {far}.')
         i_train, i_val, i_test = i_split
 
         if config["white_bkgd"]:
@@ -289,7 +297,8 @@ def load_nerf_data(config = None, cid_datadir = None, logger = None):
                                                                  basedir=cid_datadir,
                                                                  testskip=config["testskip"])
 
-        print('Loaded deepvoxels', images.shape, render_poses.shape, hwf, cid_datadir)
+        #print('Loaded deepvoxels', images.shape, render_poses.shape, hwf, cid_datadir)
+        logger.info(f"Loadeed {config['dataset_type']} data for client ID {config['client_id']}")
         i_train, i_val, i_test = i_split
 
         hemi_R = np.mean(np.linalg.norm(poses[:,:3,-1], axis=-1))
@@ -297,7 +306,7 @@ def load_nerf_data(config = None, cid_datadir = None, logger = None):
         far = hemi_R+1.
 
     else:
-        print('Unknown dataset type', config["dataset_type"], 'exiting')
+        #print('Unknown dataset type', config["dataset_type"], 'exiting')
         return
     
     near = float(near)

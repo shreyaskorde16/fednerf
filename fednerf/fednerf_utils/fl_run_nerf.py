@@ -290,7 +290,7 @@ def create_nerf(config,):
     """
     # NDC only good for LLFF-style forward facing data
     if config["dataset_type"] != 'llff' or config["no_ndc"]:
-        print('Not ndc!')
+        #print('Not ndc!')
         config['ndc'] = False
     """
     render_kwargs_test = {k : render_kwargs_train[k] for k in render_kwargs_train}
