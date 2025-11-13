@@ -39,7 +39,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
     render_poses = torch.Tensor(render_poses).to(device)
     # Misc
     img2mse = lambda x, y : torch.mean((x - y) ** 2)
-    mse2psnr = lambda x : -10. * torch.log(x) / torch.log(torch.Tensor([10.]))
+    mse2psnr = lambda x : -10. * torch.log(x) / torch.log(torch.tensor([10.], device=x.device))
     to8b = lambda x : (255*np.clip(x,0,1)).astype(np.uint8)
     
     # Prepare raybatch tensor if batching random rays
@@ -174,7 +174,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
         basedir = config["root_log_path"]
         expname = config["expname"]
         if i%config["i_weights"]==0:
-            path = os.path.join(basedir, expname, '{:06d}.tar'.format(i))
+            path = os.path.join(basedir, '{:06d}.tar'.format(i))
             torch.save({
                 'global_step': global_step,
                 'network_fn_state_dict': nerf_model.state_dict(),
@@ -182,13 +182,16 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
                 'optimizer_state_dict': optimizer.state_dict(),
             }, path)
             print('Saved checkpoints at', path)
+        
+        """
 
         if i%config["i_video"]==0 and i > 0:
             # Turn on testing mode
             with torch.no_grad():
-                rgbs, disps = render_path(render_poses, hwf, K, config["chunk"], config_test)
+                rgbs, disps = render_path(render_poses, hwf, K, config["chunk"], config_test, model=nerf_model,
+                                          model_fine=nerf_model_fine, nerf_query_fn=network_query_fn)
             print('Done, saving', rgbs.shape, disps.shape)
-            moviebase = os.path.join(basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
+            moviebase = os.path.join(basedir, '{}_spiral_{:06d}_'.format(expname, i))
             imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
             imageio.mimwrite(moviebase + 'disp.mp4', to8b(disps / np.max(disps)), fps=30, quality=8)
 
@@ -198,7 +201,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
             #         rgbs_still, _ = render_path(render_poses, hwf, args.chunk, render_kwargs_test)
             #     render_kwargs_test['c2w_staticcam'] = None
             #     imageio.mimwrite(moviebase + 'rgb_still.mp4', to8b(rgbs_still), fps=30, quality=8)
-
+        
         if i%config["i_testset"]==0 and i > 0:
             testsavedir = os.path.join(basedir, expname, 'testset_{:06d}'.format(i))
             os.makedirs(testsavedir, exist_ok=True)
@@ -212,7 +215,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
                             model_fine=nerf_model_fine, 
                             nerf_query_fn=network_query_fn)
             print('Saved test set')
-    
+        """
         if i%config["i_print"]==0 or i < 10:
             tqdm.write(f"[TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()} Client_Id: {cid}")
 
