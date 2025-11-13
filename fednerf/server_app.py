@@ -1,10 +1,14 @@
 """first: A Flower / PyTorch app."""
+import pickle
+from dataclasses import asdict
+from typing import Iterable, Optional, Tuple
 
 import torch
 import logging
 from flwr.app import ArrayRecord, ConfigRecord, Context
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
+from flwr.common import MetricRecord, Message
 from omegaconf import OmegaConf
 from fednerf.task import Net
 from logging.handlers import RotatingFileHandler
@@ -12,11 +16,11 @@ from fednerf.fednerf_utils.server_utils import (
     get_config,
     custom_logging,
     get_log_dirs,
-    CustomFedAvg,
 )
 from fednerf.fednerf_utils.fl_run_nerf import (
     create_nerf,
 )
+
 
 
 # Create ServerApp
@@ -28,6 +32,28 @@ def get_config_fn(config_dict):
     def config_fn(rnd: int):
         return ConfigRecord(config_dict)
     return config_fn
+
+class CustomFedavg(FedAvg):
+
+    def aggregate_train(
+        self,
+        server_round: int,
+        replies: Iterable[Message],
+    ) -> tuple[Optional[ArrayRecord], Optional[MetricRecord]]:
+        """Aggregate ArrayRecords and MetricRecords in the received Messages."""
+
+        for reply in replies:
+            if reply.has_content():
+                # Retrieve the ConfigRecord from the message
+                metrics = reply.content["metrics"]
+                #metadata_bytes = config_record["meta"]
+                # Deserialize it
+                #train_meta = pickle.loads(metadata_bytes)
+                #print(asdict(train_meta))
+                print(metrics)
+        # Aggregate the ArrayRecords and MetricRecords as usual
+        return super().aggregate_train(server_round, replies)
+
 
 
 @app.main()
@@ -69,7 +95,8 @@ def main(grid: Grid, context: Context) -> None:
     arrays = ArrayRecord(combined_state_dict)
 
     # Initialize FedAvg strategy
-    strategy = FedAvg(fraction_train=fraction_train)
+    #strategy = FedAvg(fraction_train=fraction_train)
+    strategy = CustomFedavg(fraction_train=fraction_train)
 
     # Start strategy, run FedAvg for `num_rounds`
     result = strategy.start(

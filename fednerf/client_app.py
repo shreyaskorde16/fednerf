@@ -132,6 +132,7 @@ def train(msg: Message, context: Context):
         "train_psnr": psnr,
         "train_psnr0": psnr0,
         "num-examples": len(i_train),
+        "client_id": cid,
     }
     metric_record = MetricRecord(metrics)
     content = RecordDict({"arrays": model_record, "metrics": metric_record})
@@ -210,7 +211,7 @@ def evaluate(msg: Message, context: Context):
     #if i%config["i_testset"]==0 and i > 0:
     testsavedir = os.path.join(root_log_path, expname, 'client_{}'.format(cid),'testset_')
     os.makedirs(testsavedir, exist_ok=True)
-    logger.info('test poses shape', poses[i_test].shape)
+    #logger.info('test poses shape', poses[i_test].shape)
     """
     with torch.no_grad():
         render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
