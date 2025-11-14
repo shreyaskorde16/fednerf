@@ -73,14 +73,15 @@ class CustomFedavg(FedAvg):
             self.logger.info(f"Server Round {server_round} - Aggregated Train Metrics: Loss: {loss:.4f}, PSNR: {psnr:.2f}, PSNR0: {psnr0:.2f}")
 
             avg_metrics = pd.DataFrame({
+                                "round": [server_round],
                                 "loss_agg": [loss],
                                 "psnr_agg": [psnr],
                                 "psnr0_agg": [psnr0],
-                                "round": [server_round],
                             })
             # Save to CSV
             csv_path = os.path.join(self.config["csv_dir"], "aggregated_metrics.csv")
-            avg_metrics.to_csv(csv_path, mode="a", header=False, index=False)
+            write_header = not os.path.exists(csv_path)
+            avg_metrics.to_csv(csv_path, mode="a", header=write_header, index=False, sep=',')
             
         else:
             print(f"Server Round {server_round} - No training metrics received.")
