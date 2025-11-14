@@ -77,36 +77,45 @@ def custom_logging(client_id: None, cfg = None):
     logger = logging.getLogger(__name__)
     return logger
 
-def get_log_dirs(Client_id = None, cfg: DictConfig = None):
+def get_log_dirs(Client_id = None, cfg: DictConfig = None, start=True):
     """ Create log directories for server and clients """
-    date = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+    
     plt_dir = None
     model_dir = None
     csv_dir = None
-    exp_name = cfg.expname
+    exp_name = cfg["expname"]
 
     if Client_id is not None:
         Cl_id = f"Client_{Client_id}"
     elif Client_id is None:
         Cl_id = "Server"
 
-    root_log_path = os.path.join("./logs", f"Experiment_{Cl_id}_{exp_name}_{date}")
-    os.makedirs(root_log_path, exist_ok=True)
+    if start:
+        date = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        root_log_path = os.path.join("./logs", f"Experiment_{Cl_id}_{exp_name}_{date}")
+        cfg["root_log_path"] = root_log_path
+    os.makedirs(cfg["root_log_path"], exist_ok=True)
 
-    json_path = os.path.join(root_log_path, "config.json")
-    OmegaConf.save(config= cfg, f= json_path)
+    json_path = os.path.join(cfg["root_log_path"], "config.json")
 
-    plt_dir = os.path.join(root_log_path, f"Exp_{Cl_id}_{exp_name}_plots")
-    model_dir = os.path.join(root_log_path, f"Exp_{Cl_id}_{exp_name}_models")
-    csv_dir = os.path.join(root_log_path, f"Exp_{Cl_id}_{exp_name}_csvs")
+    if start:
+        OmegaConf.save(config= cfg, f= json_path)
+
+    plt_dir = os.path.join(cfg["root_log_path"], f"Exp_{Cl_id}_{exp_name}_plots")
+    model_dir = os.path.join(cfg["root_log_path"], f"Exp_{Cl_id}_{exp_name}_models")
+    csv_dir = os.path.join(cfg["root_log_path"], f"Exp_{Cl_id}_{exp_name}_csvs")
     os.makedirs(plt_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)       
     os.makedirs(csv_dir, exist_ok=True)
 
-    cfg.root_log_path = root_log_path
-    cfg.plt_dir = plt_dir    
-    cfg.model_dir = model_dir
-    cfg.csv_dir = csv_dir
+    if start:
+        cfg["plt_dir"] = plt_dir    
+        cfg["model_dir"] = model_dir
+        cfg["csv_dir"] = csv_dir
+    else:
+        cfg["client_plt_dir"] = plt_dir    
+        cfg["client_model_dir"] = model_dir
+        cfg["client_csv_dir"] = csv_dir
 
     return cfg
 

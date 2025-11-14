@@ -19,7 +19,10 @@ from fednerf.fednerf_utils.fl_run_nerf import (
 )
 from fednerf.fednerf_utils.client_utils import (
     train_fednerf,
-    load_nerf_data
+    load_nerf_data,
+)
+from fednerf.fednerf_utils.server_utils import (
+    get_log_dirs,
 )
 
 # Flower ClientApp
@@ -41,6 +44,10 @@ def train(msg: Message, context: Context):
 
     #logger.info(f"Loaded config:\n{config}")
     cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
+
+    # append log directories to config
+    config = get_log_dirs(Client_id=cid, cfg=config, start=False)
+    print(f"Client {cid} config {config}")
 
     # Load NeRF data
     images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test = load_nerf_data(config = config,
