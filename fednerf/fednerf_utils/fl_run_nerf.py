@@ -188,8 +188,8 @@ def render_path(render_poses, hwf, K, chunk,
         print(i, time.time() - t)
         t = time.time()
         rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], 
-                                   verbose=i < 10, retraw=True,
                                    model=model,
+                                   use_viewdirs=config_test["use_viewdirs"],
                                    fine_model=model_fine,
                                    nerf_query_fn=nerf_query_fn,
                                    config=config_test)
@@ -198,6 +198,7 @@ def render_path(render_poses, hwf, K, chunk,
         disps.append(disp.cpu().numpy())
         if i==0:
             print(rgb.shape, disp.shape)
+        print('Done rendering', i, rgb.shape, disp.shape)
 
         """
         if gt_imgs is not None and render_factor==0:

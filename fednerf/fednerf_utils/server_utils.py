@@ -104,18 +104,22 @@ def get_log_dirs(Client_id = None, cfg: DictConfig = None, start=True):
     plt_dir = os.path.join(cfg["root_log_path"], f"Exp_{Cl_id}_{exp_name}_plots")
     model_dir = os.path.join(cfg["root_log_path"], f"Exp_{Cl_id}_{exp_name}_models")
     csv_dir = os.path.join(cfg["root_log_path"], f"Exp_{Cl_id}_{exp_name}_csvs")
+    log_dir = os.path.join(cfg["root_log_path"], f"{Cl_id}_logs")
     os.makedirs(plt_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)       
     os.makedirs(csv_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
 
     if start:
         cfg["plt_dir"] = plt_dir    
         cfg["model_dir"] = model_dir
         cfg["csv_dir"] = csv_dir
+        cfg["server_dir"] = log_dir
     else:
         cfg["client_plt_dir"] = plt_dir    
         cfg["client_model_dir"] = model_dir
         cfg["client_csv_dir"] = csv_dir
+        cfg["client_log_dir"] = log_dir
 
     return cfg
 

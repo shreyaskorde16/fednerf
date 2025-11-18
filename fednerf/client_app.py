@@ -152,11 +152,14 @@ def train(msg: Message, context: Context):
 @app.evaluate()
 def evaluate(msg: Message, context: Context):
     """Evaluate the model on local data."""
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     config = msg.content["config"]
     config["client_id"] = context.node_config["partition-id"]
 
     # load test data
     cid = context.node_config["partition-id"]
+    # append log directories to config
+    config = get_log_dirs(Client_id=cid, cfg=config, start=False)
 
     if "root_log_path" not in config:
         root_log_path = os.path.join(config["basedir"], config["expname"])
@@ -173,7 +176,27 @@ def evaluate(msg: Message, context: Context):
     images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test = load_nerf_data(config = config,
                                                                                                 cid_datadir=cid_datadir,
                                                                                                 logger=logger)
+    
+    H, W, focal = hwf
+    H, W = int(H), int(W)
+    hwf = [H, W, focal]
 
+    if K is None:
+        K = np.array([
+            [focal, 0, 0.5*W],
+            [0, focal, 0.5*H],
+            [0, 0, 1]
+        ])
+    use_batching = not config["no_batching"]
+
+    test_render_poses = np.array(poses[i_test])
+    test_render_poses = torch.Tensor(test_render_poses).to(device)
+    
+    if use_batching:
+        images = torch.Tensor(images).to(device)
+    poses = torch.Tensor(poses).to(device)
+    
+    # Load NeRF Model
     (
     nerf_model,            # Main NeRF model
     nerf_model_fine,       # Fine model
@@ -202,7 +225,6 @@ def evaluate(msg: Message, context: Context):
     nerf_model_fine.load_state_dict(fine_state_dict)
 
     #model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     nerf_model.to(device)
     nerf_model_fine.to(device)
 
@@ -211,15 +233,14 @@ def evaluate(msg: Message, context: Context):
     config_test['raw_noise_std'] = 0.
 
     root_log_path = config["root_log_path"]
-    expname = config["expname"]
+    cli_dir = config["client_log_dir"]
 
-    # Evaluate the model on local test data
-
-    #if i%config["i_testset"]==0 and i > 0:
-    testsavedir = os.path.join(root_log_path, expname, 'client_{}'.format(cid),'testset_')
+ 
+   # i = 1
+   # if i%config["i_testset"]==0 and i > 0:
+    testsavedir = os.path.join(root_log_path, 'testset_client_{}'.format(cid))
     os.makedirs(testsavedir, exist_ok=True)
-    #logger.info('test poses shape', poses[i_test].shape)
-    """
+    logger.info(f"Test poses shape {poses[i_test].shape}")
     with torch.no_grad():
         render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
                     config_test, 
@@ -229,7 +250,7 @@ def evaluate(msg: Message, context: Context):
                     model_fine=nerf_model_fine, 
                     nerf_query_fn=network_query_fn)
     print('Saved test set')
-    """
+    
     success_message = f"Client {cid} evaluation completed successfully."
     logger.info(success_message)
     
