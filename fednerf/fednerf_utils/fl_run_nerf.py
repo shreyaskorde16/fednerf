@@ -159,6 +159,12 @@ def render(H, W, K, chunk=1024*32, rays=None, verbose = False,
     k_extract = ['rgb_map', 'disp_map', 'acc_map']
     ret_list = [all_ret[k] for k in k_extract]
     ret_dict = {k : all_ret[k] for k in all_ret if k not in k_extract}
+    print(f"ret list keys shape: {[k.shape for k in ret_list]}")
+    print(f"ret list keys {[k for k in ret_list]}")
+    print(f"ret_dict: {ret_list}")
+    print(f"ret dict keys: {list(ret_dict.keys())}")
+    print(f"ret dict shapes: {[ret_dict[k].shape for k in ret_dict]}")
+    print(f"ret_dict: {ret_dict}")
     return ret_list + [ret_dict]
 
 
@@ -170,6 +176,8 @@ def render_path(render_poses, hwf, K, chunk,
                 model=None, 
                 model_fine=None,
                 nerf_query_fn=None,
+                len_testset=None,
+                client_id=None,
                 ):
 
     H, W, focal = hwf
@@ -182,6 +190,7 @@ def render_path(render_poses, hwf, K, chunk,
 
     rgbs = []
     disps = []
+    psnr_values = []
 
     t = time.time()
     for i, c2w in enumerate(tqdm(render_poses)):
@@ -193,6 +202,7 @@ def render_path(render_poses, hwf, K, chunk,
                                    fine_model=model_fine,
                                    nerf_query_fn=nerf_query_fn,
                                    config=config_test)
+        print(rgb)
 
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
@@ -200,17 +210,31 @@ def render_path(render_poses, hwf, K, chunk,
             print(rgb.shape, disp.shape)
         print('Done rendering', i, rgb.shape, disp.shape)
 
-        """
+        
         if gt_imgs is not None and render_factor==0:
-            p = -10. * np.log10(np.mean(np.square(rgb.cpu().numpy() - gt_imgs[i])))
-            print(p)
-        """
+            # Both rgb and gt_imgs[i] are PyTorch tensors
+            rgb = rgb.to(gt_imgs[i].device)
+            print(rgb.shape, gt_imgs[i].shape)
+            print(f"rgb {rgb}")
+            #print(f"gt_imgs[i] {gt_imgs[i]}")
+            mse = torch.mean((rgb - gt_imgs[i]) ** 2)
+            psnr = -10. * torch.log10(mse)
+            psnr_values.append(psnr.item())  # Convert to Python scalar
+            print(f"MSE for image {i}: {mse.item()}")
+            print(f"PSNR for image {i}: {psnr.item()}")
+            
 
         if savedir is not None:
             rgb8 = to8b(rgbs[-1])
             filename = os.path.join(savedir, '{:03d}.png'.format(i))
             imageio.imwrite(filename, rgb8)
-
+    
+    # Return average PSNR if ground truth images are present
+    if gt_imgs is not None and render_factor==0 and len(psnr_values) > 0:
+        avg_psnr = sum(psnr_values) / len(psnr_values)
+        print(f"Average PSNR: {avg_psnr} for client {client_id}")
+        return rgbs, disps, avg_psnr
+        
 
     rgbs = np.stack(rgbs, 0)
     disps = np.stack(disps, 0)
@@ -455,6 +479,7 @@ def render_rays(ray_batch,
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
 
     ret = {'rgb_map' : rgb_map, 'disp_map' : disp_map, 'acc_map' : acc_map}
+    print(f"ret before retraw: {ret}")
     if retraw:
         ret['raw'] = raw
     if N_importance > 0:

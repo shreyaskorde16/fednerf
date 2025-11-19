@@ -248,7 +248,10 @@ def evaluate(msg: Message, context: Context):
                     savedir=testsavedir, 
                     model=nerf_model,
                     model_fine=nerf_model_fine, 
-                    nerf_query_fn=network_query_fn)
+                    nerf_query_fn=network_query_fn,
+                    len_testset=len(i_test),
+                    client_id=cid,
+                    )
     print('Saved test set')
     
     success_message = f"Client {cid} evaluation completed successfully."
