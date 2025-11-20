@@ -88,7 +88,27 @@ class CustomFedavg(FedAvg):
         
         # Aggregate the ArrayRecords and MetricRecords as usual
         return super().aggregate_train(server_round, replies)
-
+    
+    def configure_train(
+        self, server_round: int, arrays: ArrayRecord, config: ConfigRecord, grid: Grid
+        ) -> Iterable[Message]:
+        """Configure the next round of federated training and maybe do LR decay."""
+        # Decrease learning rate by a factor of 0.5 every 5 rounds
+        # Note: server_round starts at 1, not 0
+        #if server_round % 5 == 0:
+            #config["lr"] *= 0.5
+            #print("LR decreased to:", config["lr"])
+        # Pass the updated config and the rest of arguments to the parent class
+        config["server_round"] = server_round
+        return super().configure_train(server_round, arrays, config, grid)
+    
+    #@abstractmethod
+    def configure_evaluate(
+        self, server_round: int, arrays: ArrayRecord, config: ConfigRecord, grid: Grid
+    ) -> Iterable[Message]:
+        """Configure the next round of evaluation."""
+        config["server_round"] = server_round
+        return super().configure_evaluate(server_round, arrays, config, grid)
 
 
 @app.main()
@@ -123,6 +143,7 @@ def main(grid: Grid, context: Context) -> None:
     # Read run config
     fraction_train: float = context.run_config["fraction-train"]
     num_rounds: int = context.run_config["num-server-rounds"]
+    config_dict["global_rounds"] = num_rounds
 
     logger.info("Loading global model...")
 

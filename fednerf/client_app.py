@@ -38,6 +38,8 @@ def train(msg: Message, context: Context):
 
     config["client_id"] = context.node_config["partition-id"]
     cid = context.node_config["partition-id"]
+    server_round = config["server_round"]
+    print(f"server round {server_round} client {cid} starting training")
 
     # Custom logging
     logger = custom_logging(client_id=cid, cfg=config)
@@ -128,6 +130,8 @@ def train(msg: Message, context: Context):
     coarse_state_dict = nerf_model.state_dict()
     fine_state_dict = nerf_model_fine.state_dict()
 
+
+
     # Prefix the fine model's keys and combine the state dictionaries
     fine_state_dict = {f"fine_{k}": v for k, v in fine_state_dict.items()}
     combined_state_dict = {**coarse_state_dict, **fine_state_dict}
@@ -155,6 +159,7 @@ def evaluate(msg: Message, context: Context):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     config = msg.content["config"]
     config["client_id"] = context.node_config["partition-id"]
+    server_round = config["server_round"]
 
     # load test data
     cid = context.node_config["partition-id"]
@@ -220,6 +225,8 @@ def evaluate(msg: Message, context: Context):
         else:
             coarse_state_dict[key] = value
 
+    
+
     # Load the state dictionaries into the models
     nerf_model.load_state_dict(coarse_state_dict)
     nerf_model_fine.load_state_dict(fine_state_dict)
@@ -228,30 +235,32 @@ def evaluate(msg: Message, context: Context):
     nerf_model.to(device)
     nerf_model_fine.to(device)
 
-    config_test = copy.deepcopy(config)
-    config_test["perturb"] = False
-    config_test['raw_noise_std'] = 0.
+    #config_test = copy.deepcopy(config)
+    config["perturb"] = False
+    config['raw_noise_std'] = 0.
 
     root_log_path = config["root_log_path"]
     cli_dir = config["client_log_dir"]
 
- 
-   # i = 1
-   # if i%config["i_testset"]==0 and i > 0:
-    testsavedir = os.path.join(root_log_path, 'testset_client_{}'.format(cid))
-    os.makedirs(testsavedir, exist_ok=True)
-    logger.info(f"Test poses shape {poses[i_test].shape}")
-    with torch.no_grad():
-        render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
-                    config_test, 
-                    gt_imgs=images[i_test], 
-                    savedir=testsavedir, 
-                    model=nerf_model,
-                    model_fine=nerf_model_fine, 
-                    nerf_query_fn=network_query_fn,
-                    len_testset=len(i_test),
-                    client_id=cid,
-                    )
+    print(f" test_poses shape {poses[i_test].shape}")
+    i = server_round
+    if i%config["i_testset"]==0 and i > 0:
+        testsavedir = os.path.join(root_log_path, 'testset_client_{}'.format(cid))
+        os.makedirs(testsavedir, exist_ok=True)
+        logger.info(f"Test poses shape {poses[i_test].shape}")
+        print(f"test poses{poses[i_test]}")
+        with torch.no_grad():
+            render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
+                        config, 
+                        gt_imgs=images[i_test], 
+                        savedir=testsavedir, 
+                        model=nerf_model,
+                        model_fine=nerf_model_fine, 
+                        nerf_query_fn=network_query_fn,
+                        len_testset=len(i_test),
+                        client_id=cid,
+                        device=device
+                        )
     print('Saved test set')
     
     success_message = f"Client {cid} evaluation completed successfully."

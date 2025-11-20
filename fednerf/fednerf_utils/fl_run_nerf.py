@@ -178,9 +178,14 @@ def render_path(render_poses, hwf, K, chunk,
                 nerf_query_fn=None,
                 len_testset=None,
                 client_id=None,
+                device=None,
                 ):
 
     H, W, focal = hwf
+    print(f"render_poses shape: {render_poses.shape}")
+    print(f"render poses device: {render_poses.device}")
+    print(f"itest images device: {gt_imgs.device if gt_imgs is not None else 'N/A'}")
+    
 
     if render_factor!=0:
         # Render downsampled for speed
@@ -198,10 +203,12 @@ def render_path(render_poses, hwf, K, chunk,
         t = time.time()
         rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], 
                                    model=model,
+                                   ndc=config_test["ndc"],
                                    use_viewdirs=config_test["use_viewdirs"],
                                    fine_model=model_fine,
                                    nerf_query_fn=nerf_query_fn,
-                                   config=config_test)
+                                   config=config_test,
+                                   device=device)
         print(rgb)
 
         rgbs.append(rgb.cpu().numpy())
@@ -459,7 +466,9 @@ def render_rays(ray_batch,
 
 #     raw = run_network(pts)
     raw = network_query_fn(pts, viewdirs, network_fn)
+    print(f"raw coarse: {raw}")
     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest, device=device)
+    print(f"rgb map : {rgb_map}")
 
     if N_importance > 0:
 
@@ -475,11 +484,12 @@ def render_rays(ray_batch,
         run_fn = network_fn if network_fine is None else network_fine
 #         raw = run_network(pts, fn=run_fn)
         raw = network_query_fn(pts, viewdirs, run_fn)
+        print(f"raw fine: {raw}")
 
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
 
     ret = {'rgb_map' : rgb_map, 'disp_map' : disp_map, 'acc_map' : acc_map}
-    print(f"ret before retraw: {ret}")
+    #print(f"ret before retraw: {ret}")
     if retraw:
         ret['raw'] = raw
     if N_importance > 0:

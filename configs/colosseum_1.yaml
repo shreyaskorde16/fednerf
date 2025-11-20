@@ -61,5 +61,5 @@ llffhold: 8           # type=int, default=8, help= will take every 1/N images as
 i_print: 1          # help='frequency of console printout and metric loggin') default = 100
 i_img: 2            # help='frequency of tensorboard image logging')  default = 500
 i_weights: 2      # help='frequency of weight ckpt saving') default = 10000
-i_testset: 2      # help='frequency of testset saving') default = 50000
+i_testset: 1      # help='frequency of testset saving') default = 50000
 i_video: 2        # help='frequency of render_poses video saving') default = 50000
