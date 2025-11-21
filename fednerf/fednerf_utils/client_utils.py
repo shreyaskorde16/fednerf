@@ -202,8 +202,9 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
             #     render_kwargs_test['c2w_staticcam'] = None
             #     imageio.mimwrite(moviebase + 'rgb_still.mp4', to8b(rgbs_still), fps=30, quality=8)
         
+        root_log_path = config["root_log_path"]
         if i%config["i_testset"]==0 and i > 0:
-            testsavedir = os.path.join(basedir, expname, 'testset_{:06d}'.format(i))
+            testsavedir = os.path.join(root_log_path, 'testset_client_{}'.format(cid))
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', poses[i_test].shape)
             with torch.no_grad():
@@ -213,7 +214,10 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
                             savedir=testsavedir, 
                             model=nerf_model,
                             model_fine=nerf_model_fine, 
-                            nerf_query_fn=network_query_fn)
+                            nerf_query_fn=network_query_fn,
+                            len_testset=len(i_test),
+                            client_id=cid,
+                            device=device)
             print('Saved test set')
         """
         if i%config["i_print"]==0 or i < 10:
@@ -306,11 +310,11 @@ def load_nerf_data(config = None, cid_datadir = None, logger = None):
         far = hemi_R+1.
 
     else:
-        #print('Unknown dataset type', config["dataset_type"], 'exiting')
+        print('Unknown dataset type', config["dataset_type"], 'exiting')
         return
     
-    near = float(near)
-    far = float(far)
+    #near = float(near)
+    #far = float(far)
     
     return images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test
     

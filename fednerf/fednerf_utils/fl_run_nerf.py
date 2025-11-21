@@ -159,12 +159,7 @@ def render(H, W, K, chunk=1024*32, rays=None, verbose = False,
     k_extract = ['rgb_map', 'disp_map', 'acc_map']
     ret_list = [all_ret[k] for k in k_extract]
     ret_dict = {k : all_ret[k] for k in all_ret if k not in k_extract}
-    print(f"ret list keys shape: {[k.shape for k in ret_list]}")
-    print(f"ret list keys {[k for k in ret_list]}")
-    print(f"ret_dict: {ret_list}")
-    print(f"ret dict keys: {list(ret_dict.keys())}")
-    print(f"ret dict shapes: {[ret_dict[k].shape for k in ret_dict]}")
-    print(f"ret_dict: {ret_dict}")
+
     return ret_list + [ret_dict]
 
 
@@ -204,6 +199,8 @@ def render_path(render_poses, hwf, K, chunk,
         rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], 
                                    model=model,
                                    ndc=config_test["ndc"],
+                                   near=config_test["near"],
+                                   far=config_test["far"],
                                    use_viewdirs=config_test["use_viewdirs"],
                                    fine_model=model_fine,
                                    nerf_query_fn=nerf_query_fn,
@@ -249,7 +246,7 @@ def render_path(render_poses, hwf, K, chunk,
     return rgbs, disps
 
 
-def create_nerf(config,):
+def create_nerf(config):
     """Instantiate NeRF's MLP model.
     """
     embed_fn, input_ch = get_embedder(config["multires"], config["i_embed"])
@@ -466,9 +463,9 @@ def render_rays(ray_batch,
 
 #     raw = run_network(pts)
     raw = network_query_fn(pts, viewdirs, network_fn)
-    print(f"raw coarse: {raw}")
+
     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest, device=device)
-    print(f"rgb map : {rgb_map}")
+    
 
     if N_importance > 0:
 
@@ -484,7 +481,6 @@ def render_rays(ray_batch,
         run_fn = network_fn if network_fine is None else network_fine
 #         raw = run_network(pts, fn=run_fn)
         raw = network_query_fn(pts, viewdirs, run_fn)
-        print(f"raw fine: {raw}")
 
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
 

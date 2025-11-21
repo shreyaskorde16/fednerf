@@ -73,12 +73,12 @@ def train(msg: Message, context: Context):
 
     # Load NeRF Model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    np.random.seed(0)
+    #np.random.seed(0)
 
     # import model and assign start value
     #global_step = start 
-    config['near'] = near
-    config['far'] = far
+    config['near'] = float(near)
+    config['far'] = float(far)
 
     #model, model_fine, network_query_fn, start, optimizer, grad_vars, config, config_test = create_nerf(config=config)
 
@@ -213,6 +213,9 @@ def evaluate(msg: Message, context: Context):
     config_test            # Test configuration
     ) = create_nerf(config=config)
 
+    config['near'] = float(near)
+    config['far'] = float(far)
+
 
     combined_state_dict = msg.content["arrays"].to_torch_state_dict()
 
@@ -248,9 +251,12 @@ def evaluate(msg: Message, context: Context):
         testsavedir = os.path.join(root_log_path, 'testset_client_{}'.format(cid))
         os.makedirs(testsavedir, exist_ok=True)
         logger.info(f"Test poses shape {poses[i_test].shape}")
-        print(f"test poses{poses[i_test]}")
+        #print(f"test poses{poses[i_test]}")
         with torch.no_grad():
-            render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, config["chunk"], 
+            render_path(torch.Tensor(poses[i_test]).to(device), 
+                        hwf, 
+                        K, 
+                        config["chunk"], 
                         config, 
                         gt_imgs=images[i_test], 
                         savedir=testsavedir, 
