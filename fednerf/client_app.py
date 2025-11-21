@@ -121,7 +121,7 @@ def train(msg: Message, context: Context):
     nerf_model, nerf_model_fine, loss, psnr, psnr0 = train_fednerf(H, W, K, poses, i_train, i_test, i_val, start, 
                                                     nerf_model, nerf_model_fine, network_query_fn, 
                                                     render_poses, device, optimizer, 
-                                                    hwf, images, logger, config)
+                                                    hwf, images, logger, server_round, config)
 
 
 

@@ -24,7 +24,7 @@ dependencies = [
     "opencv-python==4.12.0.88",
     "tensorboard>=2.0",
     "numpy==2.2.6",
-    "scikit-image==0.25.2",
+    "omegaconf==2.3.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -40,7 +40,7 @@ clientapp = "fednerf.client_app:app"
 
 # Custom config values accessible via `context.run_config`
 [tool.flwr.app.config]
-num-server-rounds = 3
+num-server-rounds = 50
 fraction-train = 1
 local-epochs = 1
 lr = 0.01
@@ -53,7 +53,7 @@ default = "local-simulation"
 [tool.flwr.federations.local-simulation]
 options.num-supernodes = 3
 options.backend.client-resources.num-cpus = 1
-options.backend.client-resources.num-gpus = 1
+options.backend.client-resources.num-gpus = 0.5
 # options.backend.client-resources.num-gpus = 0.5
 
 # Remote federation example for use with SuperLink

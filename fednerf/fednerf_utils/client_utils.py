@@ -30,7 +30,7 @@ from fednerf.fednerf_utils.load_deepvoxels import load_dv_data
 def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start, 
                   nerf_model, nerf_model_fine, network_query_fn, 
                   render_poses, device, optimizer, 
-                  hwf, images, logger, config):
+                  hwf, images, logger,server_round, config):
     """Train the FedNeRF model on local data."""
 
     cid = config['client_id']
@@ -173,7 +173,7 @@ def train_fednerf(H, W, K, poses, i_train, i_test, i_val, start,
         # Rest is logging
         basedir = config["root_log_path"]
         expname = config["expname"]
-        if i%config["i_weights"]==0:
+        if server_round%config["i_weights"]==0:
             path = os.path.join(basedir, '{:06d}.tar'.format(i))
             torch.save({
                 'global_step': global_step,
