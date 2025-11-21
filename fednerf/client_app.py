@@ -268,6 +268,7 @@ def evaluate(msg: Message, context: Context):
                         device=device
                         )
     print('Saved test set')
+    print('Saved test set')
     
     success_message = f"Client {cid} evaluation completed successfully."
     logger.info(success_message)
