@@ -174,13 +174,11 @@ def render_path(render_poses, hwf, K, chunk,
                 len_testset=None,
                 client_id=None,
                 device=None,
+                logger=None,
+                server_round=None,
                 ):
 
     H, W, focal = hwf
-    print(f"render_poses shape: {render_poses.shape}")
-    print(f"render poses device: {render_poses.device}")
-    print(f"itest images device: {gt_imgs.device if gt_imgs is not None else 'N/A'}")
-    
 
     if render_factor!=0:
         # Render downsampled for speed
@@ -191,10 +189,10 @@ def render_path(render_poses, hwf, K, chunk,
     rgbs = []
     disps = []
     psnr_values = []
+    mse_values = []
 
     t = time.time()
     for i, c2w in enumerate(tqdm(render_poses)):
-        print(i, time.time() - t)
         t = time.time()
         rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], 
                                    model=model,
@@ -206,27 +204,21 @@ def render_path(render_poses, hwf, K, chunk,
                                    nerf_query_fn=nerf_query_fn,
                                    config=config_test,
                                    device=device)
-        print(rgb)
-
+        
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
         if i==0:
-            print(rgb.shape, disp.shape)
-        print('Done rendering', i, rgb.shape, disp.shape)
-
+            logger.info(f"rgb shape {rgb.shape}, disp shape { disp.shape}")
         
         if gt_imgs is not None and render_factor==0:
             # Both rgb and gt_imgs[i] are PyTorch tensors
             rgb = rgb.to(gt_imgs[i].device)
-            print(rgb.shape, gt_imgs[i].shape)
-            print(f"rgb {rgb}")
+
             #print(f"gt_imgs[i] {gt_imgs[i]}")
             mse = torch.mean((rgb - gt_imgs[i]) ** 2)
             psnr = -10. * torch.log10(mse)
             psnr_values.append(psnr.item())  # Convert to Python scalar
-            print(f"MSE for image {i}: {mse.item()}")
-            print(f"PSNR for image {i}: {psnr.item()}")
-            
+            mse_values.append(mse.item())
 
         if savedir is not None:
             rgb8 = to8b(rgbs[-1])
@@ -236,8 +228,9 @@ def render_path(render_poses, hwf, K, chunk,
     # Return average PSNR if ground truth images are present
     if gt_imgs is not None and render_factor==0 and len(psnr_values) > 0:
         avg_psnr = sum(psnr_values) / len(psnr_values)
-        print(f"Average PSNR: {avg_psnr} for client {client_id}")
-        return rgbs, disps, avg_psnr
+        avg_mse = sum(mse_values) / len(mse_values)
+        logger.info(f"~~~~~~~~~~~~~ [TEST] MSE: {avg_mse} PSNR: {avg_psnr} Client Id: {client_id} Server Round. {server_round} ~~~~~~~~~~~~~")
+        return rgbs, disps, avg_psnr, avg_mse
         
 
     rgbs = np.stack(rgbs, 0)
@@ -627,19 +620,18 @@ def train():
                                                                   spherify=args.spherify)
         hwf = poses[0,:3,-1]
         poses = poses[:,:3,:4]
-        print('Loaded llff', images.shape, render_poses.shape, hwf, args.datadir)
+
         if not isinstance(i_test, list):
             i_test = [i_test]
 
         if args.llffhold > 0:
-            print('Auto LLFF holdout,', args.llffhold)
             i_test = np.arange(images.shape[0])[::args.llffhold]
 
         i_val = i_test
         i_train = np.array([i for i in np.arange(int(images.shape[0])) if
                         (i not in i_test and i not in i_val)])
 
-        print('DEFINING BOUNDS')
+
         if args.no_ndc:
             near = np.ndarray.min(bds) * .9
             far = np.ndarray.max(bds) * 1.
@@ -647,11 +639,11 @@ def train():
         else:
             near = 0.
             far = 1.
-        print('NEAR FAR', near, far)
+
 
     elif args.dataset_type == 'blender':
         images, poses, render_poses, hwf, i_split = load_blender_data(args.datadir, args.half_res, args.testskip)
-        print('Loaded blender', images.shape, render_poses.shape, hwf, args.datadir)
+
         i_train, i_val, i_test = i_split
 
         near = 2.
@@ -664,8 +656,6 @@ def train():
 
     elif args.dataset_type == 'LINEMOD':
         images, poses, render_poses, hwf, K, i_split, near, far = load_LINEMOD_data(args.datadir, args.half_res, args.testskip)
-        print(f'Loaded LINEMOD, images shape: {images.shape}, hwf: {hwf}, K: {K}')
-        print(f'[CHECK HERE] near: {near}, far: {far}.')
         i_train, i_val, i_test = i_split
 
         if args.white_bkgd:
@@ -679,7 +669,7 @@ def train():
                                                                  basedir=args.datadir,
                                                                  testskip=args.testskip)
 
-        print('Loaded deepvoxels', images.shape, render_poses.shape, hwf, args.datadir)
+        #print('Loaded deepvoxels', images.shape, render_poses.shape, hwf, args.datadir)
         i_train, i_val, i_test = i_split
 
         hemi_R = np.mean(np.linalg.norm(poses[:,:3,-1], axis=-1))
@@ -767,18 +757,13 @@ def train():
     use_batching = not args.no_batching
     if use_batching:
         # For random ray batching
-        print('get rays')
         rays = np.stack([get_rays_np(H, W, K, p) for p in poses[:,:3,:4]], 0) # [N, ro+rd, H, W, 3]
-        print('done, concats')
         rays_rgb = np.concatenate([rays, images[:,None]], 1) # [N, ro+rd+rgb, H, W, 3]
         rays_rgb = np.transpose(rays_rgb, [0,2,3,1,4]) # [N, H, W, ro+rd+rgb, 3]
         rays_rgb = np.stack([rays_rgb[i] for i in i_train], 0) # train images only
         rays_rgb = np.reshape(rays_rgb, [-1,3,3]) # [(N-1)*H*W, ro+rd+rgb, 3]
         rays_rgb = rays_rgb.astype(np.float32)
-        print('shuffle rays')
         np.random.shuffle(rays_rgb)
-
-        print('done')
         i_batch = 0
 
     # Move training data to GPU

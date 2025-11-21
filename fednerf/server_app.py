@@ -142,8 +142,8 @@ def main(grid: Grid, context: Context) -> None:
 
     # Read run config
     fraction_train: float = context.run_config["fraction-train"]
-    num_rounds: int = context.run_config["num-server-rounds"]
-    config_dict["global_rounds"] = num_rounds
+    #num_rounds: int = context.run_config["num-server-rounds"]
+    num_rounds = config_dict["global_rounds"] 
 
     logger.info("Loading global model...")
 
@@ -163,11 +163,6 @@ def main(grid: Grid, context: Context) -> None:
         num_rounds=num_rounds,
     )
 
-    """
-    # Save final model to disk
-    print("\nSaving final model to disk...")
-    state_dict = result.arrays.to_torch_state_dict()
-    torch.save(state_dict, "final_model.pt")
 
     # Save final models to disk
     print("\nSaving final models to disk...")
@@ -184,6 +179,8 @@ def main(grid: Grid, context: Context) -> None:
             aggregated_coarse_state_dict[key] = value
 
     # Save the aggregated models
-    torch.save(aggregated_coarse_state_dict, "final_nerf_coarse.pt")
-    torch.save(aggregated_fine_state_dict, "final_nerf_fine.pt")
-    """
+    coarse_path = os.path.join(config_dict["model_dir"], "nerf_coarse.pt")
+    fine_path = os.path.join(config_dict["model_dir"], "nerf_fine.pt")
+    torch.save(aggregated_coarse_state_dict, coarse_path)
+    torch.save(aggregated_fine_state_dict, fine_path)
+    
