@@ -248,7 +248,7 @@ def evaluate(msg: Message, context: Context):
     print(f" test_poses shape {poses[i_test].shape}")
     i = server_round
     if i%config["i_testset"]==0 and i > 0:
-        testsavedir = os.path.join(root_log_path, cli_dir, 'testset_client_{}'.format(cid))
+        testsavedir = os.path.join(cli_dir, 'testset_client_{}'.format(cid))
         os.makedirs(testsavedir, exist_ok=True)
         logger.info(f"Test poses shape {poses[i_test].shape}")
         #print(f"test poses{poses[i_test]}")
