@@ -22,6 +22,9 @@ from fednerf.fednerf_utils.server_utils import (
 from fednerf.fednerf_utils.fl_run_nerf import (
     create_nerf,
 )
+from fednerf.my_strategy import (
+    CustomFedAdagrad,
+)
 
 
 
@@ -152,7 +155,8 @@ def main(grid: Grid, context: Context) -> None:
 
     # Initialize FedAvg strategy
     #strategy = FedAvg(fraction_train=fraction_train)
-    strategy = CustomFedavg(logger=logger, config=config_dict, fraction_train=fraction_train)
+    #strategy = CustomFedavg(logger=logger, config=config_dict, fraction_train=fraction_train)
+    strategy = CustomFedAdagrad(logger=logger, config=config_dict, fraction_train=fraction_train)
 
     # Start strategy, run FedAvg for `num_rounds`
     result = strategy.start(

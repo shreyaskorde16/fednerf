@@ -5,8 +5,8 @@ expname: "colosseum_test"
 basedir: "./logs"
 datadir: "./data/nerf_llff_data"
 dataset_type: "llff"
-local_iterations: 500  # number of local training iterations per client
-global_rounds: 200
+local_iterations: 50  # number of local training iterations per client
+global_rounds: 4000
 # N_rand: 1024
 
 ## training options
