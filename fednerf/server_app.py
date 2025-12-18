@@ -24,6 +24,7 @@ from fednerf.fednerf_utils.fl_run_nerf import (
 )
 from fednerf.my_strategy import (
     CustomFedAdagrad,
+    CustomFedProx,
 )
 
 
@@ -153,10 +154,10 @@ def main(grid: Grid, context: Context) -> None:
     #combined_state_dict = {**global_model_state_dict, **fine_state_dict}
     arrays = ArrayRecord(combined_state_dict)
 
-    # Initialize FedAvg strategy
-    #strategy = FedAvg(fraction_train=fraction_train)
+    # Initialize strategy
     #strategy = CustomFedavg(logger=logger, config=config_dict, fraction_train=fraction_train)
-    strategy = CustomFedAdagrad(logger=logger, config=config_dict, fraction_train=fraction_train)
+    #strategy = CustomFedAdagrad(logger=logger, config=config_dict, fraction_train=fraction_train)
+    strategy = CustomFedProx(logger=logger, config=config_dict, proximal_mu=config_dict["mu"], fraction_train=fraction_train)
 
     # Start strategy, run FedAvg for `num_rounds`
     result = strategy.start(
