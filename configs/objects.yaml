@@ -1,7 +1,7 @@
 ---
 
-## Experiment settings for Federated Learning with NeRF on Colosseum_1 dataset
-expname: "colosseum_test"
+## Experiment settings for Federated Learning with NeRF on Objects dataset
+expname: "Objects_test"
 basedir: "./logs"
 datadir: "./data/nerf_llff_data"
 dataset_type: "llff"

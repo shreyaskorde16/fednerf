@@ -119,9 +119,11 @@ class CustomFedavg(FedAvg):
 def main(grid: Grid, context: Context) -> None:
     """Main entry point for the ServerApp."""
 
+    config_file_name: str = context.run_config["config-file-name"]
+    # config_file_name="colosseum_1.yaml"
     config = get_config(
         config_path="./configs",
-        config_file_name="colosseum_1.yaml",
+        config_file_name=config_file_name,
     )
 
     # append log directories to config
