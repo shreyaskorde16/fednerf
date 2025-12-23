@@ -40,12 +40,24 @@ def train(msg: Message, context: Context):
     cid = context.node_config["partition-id"]
     server_round = config["server_round"]
     print(f"server round {server_round} client {cid} starting training")
-
+    cid = int(cid)
     # Custom logging
     logger = custom_logging(client_id=cid, cfg=config)
 
     #logger.info(f"Loaded config:\n{config}")
-    cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
+    if config["expname"] == "colosseum_test":
+        cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
+    elif config["expname"] == "Objects_test":
+        if cid == 0:
+            cid_datadir = os.path.join(config["datadir"], f"buds_processed")
+            print(f"cid_datadir {cid_datadir}")
+        elif cid == 1:
+            cid_datadir = os.path.join(config["datadir"], f"cell_processed")
+        elif cid == 2:
+            cid_datadir = os.path.join(config["datadir"], f"statue_processed")
+    
+    if cid_datadir is None:
+        print(f"cid datadir is None")
 
     # append log directories to config
     config = get_log_dirs(Client_id=cid, cfg=config, start=False)
@@ -174,8 +186,20 @@ def evaluate(msg: Message, context: Context):
     # Custom logging
     logger = custom_logging(client_id=cid, cfg=config)
     #logger.info(f"Loaded config:\n{config}")
-    cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
-    #print(f"Client {cid} using data from {cid_datadir}")
+    
+    if config["expname"] == "colosseum_test":
+        cid_datadir = os.path.join(config["datadir"], f"colosseum_{cid}_processed")
+    elif config["expname"] == "Objects_test":
+        if cid == 0:
+            cid_datadir = os.path.join(config["datadir"], f"buds_processed")
+            print(f"cid_datadir {cid_datadir}")
+        elif cid == 1:
+            cid_datadir = os.path.join(config["datadir"], f"cell_processed")
+        elif cid == 2:
+            cid_datadir = os.path.join(config["datadir"], f"statue_processed")
+    
+    if cid_datadir is None:
+        print(f"cid datadir is None")
 
     # Load NeRF data
     images, poses, render_poses, hwf, K, near, far, i_train, i_val, i_test = load_nerf_data(config = config,

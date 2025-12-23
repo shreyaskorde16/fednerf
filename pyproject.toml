@@ -44,7 +44,8 @@ num-server-rounds = 3
 fraction-train = 1
 local-epochs = 1
 lr = 0.01
-config-file-name = "colosseum_1.yaml"
+config-file-name = "objects.yaml"
+
 
 # Default federation to use when running the app
 [tool.flwr.federations]
@@ -54,7 +55,7 @@ default = "local-simulation"
 [tool.flwr.federations.local-simulation]
 options.num-supernodes = 3
 options.backend.client-resources.num-cpus = 1
-options.backend.client-resources.num-gpus = 0.5
+options.backend.client-resources.num-gpus = 1
 # options.backend.client-resources.num-gpus = 0.5
 
 # Remote federation example for use with SuperLink
