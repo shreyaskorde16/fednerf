@@ -5,8 +5,8 @@ expname: "Objects_test"
 basedir: "./logs"
 datadir: "./data/nerf_llff_data"
 dataset_type: "llff"
-local_iterations: 2  # number of local training iterations per client
-global_rounds: 2
+local_iterations: 10000  # number of local training iterations per client
+global_rounds: 100
 # N_rand: 1024
 mu: 1.0
 

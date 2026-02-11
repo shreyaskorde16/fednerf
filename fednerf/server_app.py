@@ -157,9 +157,9 @@ def main(grid: Grid, context: Context) -> None:
     arrays = ArrayRecord(combined_state_dict)
 
     # Initialize strategy
-    #strategy = CustomFedavg(logger=logger, config=config_dict, fraction_train=fraction_train)
+    strategy = CustomFedavg(logger=logger, config=config_dict, fraction_train=fraction_train)
     #strategy = CustomFedAdagrad(logger=logger, config=config_dict, fraction_train=fraction_train)
-    strategy = CustomFedProx(logger=logger, config=config_dict, proximal_mu=config_dict["mu"], fraction_train=fraction_train)
+    #strategy = CustomFedProx(logger=logger, config=config_dict, proximal_mu=config_dict["mu"], fraction_train=fraction_train)
 
     # Start strategy, run FedAvg for `num_rounds`
     result = strategy.start(
