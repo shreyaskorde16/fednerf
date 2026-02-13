@@ -4,6 +4,7 @@ import torch
 import os
 import numpy as np
 import copy
+import imageio
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 from omegaconf import OmegaConf
@@ -55,6 +56,14 @@ def train(msg: Message, context: Context):
             cid_datadir = os.path.join(config["datadir"], f"cell_processed")
         elif cid == 2:
             cid_datadir = os.path.join(config["datadir"], f"statue_processed")
+    elif config["expname"] == "Synthetic_Objectsv0.1":
+        if cid == 0:
+            cid_datadir = os.path.join(config["datadir"], f"square_object_v0.4")
+            print(f"cid_datadir {cid_datadir}")
+        elif cid == 1:
+            cid_datadir = os.path.join(config["datadir"], f"rectanngle_object_v0.1")
+        elif cid == 2:
+            cid_datadir = os.path.join(config["datadir"], f"cylinder_object_v0.1")
     
     if cid_datadir is None:
         print(f"cid datadir is None")
@@ -197,6 +206,14 @@ def evaluate(msg: Message, context: Context):
             cid_datadir = os.path.join(config["datadir"], f"cell_processed")
         elif cid == 2:
             cid_datadir = os.path.join(config["datadir"], f"statue_processed")
+    elif config["expname"] == "Synthetic_Objectsv0.1":
+        if cid == 0:
+            cid_datadir = os.path.join(config["datadir"], f"square_object_v0.4")
+            print(f"cid_datadir {cid_datadir}")
+        elif cid == 1:
+            cid_datadir = os.path.join(config["datadir"], f"rectanngle_object_v0.1")
+        elif cid == 2:
+            cid_datadir = os.path.join(config["datadir"], f"cylinder_object_v0.1")
     
     if cid_datadir is None:
         print(f"cid datadir is None")
@@ -218,8 +235,9 @@ def evaluate(msg: Message, context: Context):
         ])
     use_batching = not config["no_batching"]
 
-    test_render_poses = np.array(poses[i_test])
-    test_render_poses = torch.Tensor(test_render_poses).to(device)
+    if config["render_test"]:
+        test_render_poses = np.array(poses[i_test])
+        test_render_poses = torch.Tensor(test_render_poses).to(device)
     
     if use_batching:
         images = torch.Tensor(images).to(device)
@@ -293,6 +311,27 @@ def evaluate(msg: Message, context: Context):
                         logger=logger,
                         server_round=server_round
                         )
+    if i%config["i_video"]==0 and i > 0:
+        with torch.no_grad():
+            rgbs, disps = render_path(
+                        test_render_poses,
+                        hwf,
+                        K,
+                        config["chunk"],
+                        config,
+                        model=nerf_model,
+                        model_fine=nerf_model_fine, 
+                        nerf_query_fn=network_query_fn,
+                        len_testset=len(i_test),
+                        client_id=cid,
+                        device=device,
+                        logger=logger,
+                        server_round=server_round
+                        )
+        print('Done, saving', rgbs.shape, disps.shape)
+        moviebase = os.path.join(cli_dir, 'client_{}_spiral_{:06d}_'.format(cid, i)) 
+        imageio.mimwrite(moviebase + 'rgb.mp4', to8b(rgbs), fps=30, quality=8)
+        imageio.mimwrite(moviebase + 'disp.mp4', to8b(disps / np.max(disps)), fps=30, quality=8)   
 
     
     success_message = f"Client {cid} evaluation completed successfully."
