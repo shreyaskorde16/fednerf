@@ -5,7 +5,7 @@ expname: "Synthetic_Objectsv0.1"
 basedir: "./logs"
 datadir: "./data/nerf_synthetic"
 dataset_type: "blender"
-local_iterations: 2  # number of local training iterations per client
+local_iterations: 1  # number of local training iterations per client
 global_rounds: 2
 # N_rand: 1024
 mu: 1.0
@@ -53,7 +53,7 @@ white_bkgd: true     # action='store_true', help=set to render synthetic data on
 half_res: false       # action='store_true', help=load blender synthetic data at 400x400 instead of 800x800
 
 ## llff flags
-factor: 8             # downsample factor for LLFF images
+factor: 0             # downsample factor for LLFF images
 no_ndc: true         # action='store_true', help= do not use normalized device coordinates (set for non-forward facing scenes)
 lindisp: true        # action='store_true', help= sampling linearly in disparity rather than depth
 spherify: true        # action='store_true', help= set for spherical 360 scenes
@@ -63,5 +63,5 @@ llffhold: 8           # type=int, default=8, help= will take every 1/N images as
 i_print: 1          # help='frequency of console printout and metric loggin') default = 100
 i_img: 2            # help='frequency of tensorboard image logging')  default = 500
 i_weights: 3    # help='frequency of weight ckpt saving') default = 10000
-i_testset: 25      # help='frequency of testset saving') default = 50000
+i_testset: 2      # help='frequency of testset saving') default = 50000
 i_video: 2        # help='frequency of render_poses video saving') default = 50000

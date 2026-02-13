@@ -61,7 +61,7 @@ def train(msg: Message, context: Context):
             cid_datadir = os.path.join(config["datadir"], f"square_object_v0.4")
             print(f"cid_datadir {cid_datadir}")
         elif cid == 1:
-            cid_datadir = os.path.join(config["datadir"], f"rectanngle_object_v0.1")
+            cid_datadir = os.path.join(config["datadir"], f"rectangle_object_v0.1")
         elif cid == 2:
             cid_datadir = os.path.join(config["datadir"], f"cylinder_object_v0.1")
     
@@ -211,7 +211,7 @@ def evaluate(msg: Message, context: Context):
             cid_datadir = os.path.join(config["datadir"], f"square_object_v0.4")
             print(f"cid_datadir {cid_datadir}")
         elif cid == 1:
-            cid_datadir = os.path.join(config["datadir"], f"rectanngle_object_v0.1")
+            cid_datadir = os.path.join(config["datadir"], f"rectangle_object_v0.1")
         elif cid == 2:
             cid_datadir = os.path.join(config["datadir"], f"cylinder_object_v0.1")
     
